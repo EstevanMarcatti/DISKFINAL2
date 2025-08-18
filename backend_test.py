@@ -459,6 +459,11 @@ def main():
         ("Mark as Paid", tester.test_mark_as_paid),
         ("Get Client Stats", tester.test_client_stats),
         ("Verify Status Changes", tester.test_verify_status_changes),
+        ("Update Dumpster Price", tester.test_update_dumpster_price),
+        ("Rental Filters", tester.test_rental_filters),
+        ("Dashboard Stats", tester.test_dashboard_stats),
+        ("Financial Summary", tester.test_financial_summary),
+        ("Unregistered Client Rental", tester.test_unregistered_client_rental),
     ]
     
     for test_name, test_func in tests:
