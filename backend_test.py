@@ -287,6 +287,161 @@ class DiskEntulhoAPITester:
         
         return success
 
+    def test_update_dumpster_price(self):
+        """Test PUT /api/dumpster-types/{size} - Price configuration feature"""
+        # Test updating price for "Pequena" dumpster
+        new_price = 175.0
+        success, response = self.run_test(
+            "Update Dumpster Price",
+            "PUT",
+            "dumpster-types/Pequena",
+            200,
+            data={"price": new_price}
+        )
+        
+        if success:
+            print(f"   ✅ Price updated successfully")
+            
+            # Verify the price was actually updated
+            verify_success, verify_response = self.run_test(
+                "Verify Price Update",
+                "GET",
+                "dumpster-types",
+                200
+            )
+            
+            if verify_success:
+                pequena_type = next((dt for dt in verify_response if dt.get('size') == 'Pequena'), None)
+                if pequena_type and pequena_type.get('price') == new_price:
+                    print(f"   ✅ Price verification successful: R$ {pequena_type.get('price')}")
+                else:
+                    print(f"   ❌ Price verification failed")
+        
+        return success
+
+    def test_rental_filters(self):
+        """Test rental note filtering endpoints"""
+        # Test active rentals
+        success1, response1 = self.run_test(
+            "Get Active Rentals",
+            "GET",
+            "rental-notes/active",
+            200
+        )
+        
+        # Test retrieved rentals  
+        success2, response2 = self.run_test(
+            "Get Retrieved Rentals",
+            "GET",
+            "rental-notes/retrieved",
+            200
+        )
+        
+        # Test overdue rentals
+        success3, response3 = self.run_test(
+            "Get Overdue Rentals",
+            "GET",
+            "rental-notes/overdue",
+            200
+        )
+        
+        if success1 and success2 and success3:
+            print(f"   ✅ Active rentals: {len(response1)} items")
+            print(f"   ✅ Retrieved rentals: {len(response2)} items")
+            print(f"   ✅ Overdue rentals: {len(response3)} items")
+            
+            # Verify our test rental is in retrieved list
+            if self.created_rental_id:
+                found_in_retrieved = any(r.get('id') == self.created_rental_id for r in response2)
+                if found_in_retrieved:
+                    print(f"   ✅ Test rental found in retrieved list")
+                else:
+                    print(f"   ❌ Test rental not found in retrieved list")
+        
+        return success1 and success2 and success3
+
+    def test_dashboard_stats(self):
+        """Test GET /api/dashboard/stats - Dashboard functionality"""
+        success, response = self.run_test(
+            "Get Dashboard Stats",
+            "GET",
+            "dashboard/stats",
+            200
+        )
+        
+        if success:
+            expected_keys = ['total_clients', 'active_dumpsters', 'retrieved_dumpsters', 'overdue_dumpsters', 'total_payments']
+            for key in expected_keys:
+                if key in response:
+                    print(f"   ✅ {key}: {response[key]}")
+                else:
+                    print(f"   ❌ Missing key: {key}")
+        
+        return success
+
+    def test_financial_summary(self):
+        """Test GET /api/financial/monthly-summary - Financial functionality"""
+        success, response = self.run_test(
+            "Get Monthly Financial Summary",
+            "GET",
+            "financial/monthly-summary",
+            200
+        )
+        
+        if success:
+            expected_keys = ['month', 'total_received', 'total_paid', 'net_income', 'receivables', 'payments']
+            for key in expected_keys:
+                if key in response:
+                    if key in ['receivables', 'payments']:
+                        print(f"   ✅ {key}: {len(response[key])} items")
+                    else:
+                        print(f"   ✅ {key}: {response[key]}")
+                else:
+                    print(f"   ❌ Missing key: {key}")
+                    
+            # Check if our payment created a receivable
+            receivables = response.get('receivables', [])
+            if self.created_rental_id:
+                found_receivable = any(r.get('rental_note_id') == self.created_rental_id for r in receivables)
+                if found_receivable:
+                    print(f"   ✅ Automatic receivable created for paid rental")
+                else:
+                    print(f"   ⚠️  No automatic receivable found for paid rental")
+        
+        return success
+
+    def test_unregistered_client_rental(self):
+        """Test creating rental for unregistered client"""
+        rental_date = datetime.now().isoformat()
+        
+        test_rental = {
+            "client_name": "Cliente Não Cadastrado Teste",
+            "client_address": "Rua Temporária, 456",
+            "client_phone": "(11) 98765-4321",
+            "dumpster_code": f"TEMP{datetime.now().strftime('%H%M%S')}",
+            "dumpster_size": "Grande",
+            "rental_date": rental_date,
+            "description": "Teste de cliente não cadastrado",
+            "price": 350.0
+        }
+        
+        success, response = self.run_test(
+            "Create Rental for Unregistered Client",
+            "POST",
+            "rental-notes",
+            200,
+            data=test_rental
+        )
+        
+        if success and 'id' in response:
+            print(f"   ✅ Unregistered client rental created with ID: {response['id']}")
+            print(f"   ✅ Client name: {response.get('client_name')}")
+            print(f"   ✅ Client address: {response.get('client_address')}")
+            print(f"   ✅ Client phone: {response.get('client_phone')}")
+            print(f"   ✅ Client ID: {response.get('client_id')} (should be None)")
+        
+        return success
+
 def main():
     print("🚀 Starting Disk Entulho Marchioretto API Tests")
     print("=" * 60)
