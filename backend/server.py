@@ -40,11 +40,27 @@ class Client(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     address: str
+    phone: Optional[str] = ""
+    email: Optional[str] = ""
+    additional_address: Optional[str] = ""
+    notes: Optional[str] = ""
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ClientCreate(BaseModel):
     name: str
     address: str
+    phone: Optional[str] = ""
+    email: Optional[str] = ""
+    additional_address: Optional[str] = ""
+    notes: Optional[str] = ""
+
+class ClientUpdate(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    additional_address: Optional[str] = None
+    notes: Optional[str] = None
 
 class DumpsterType(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -53,14 +69,15 @@ class DumpsterType(BaseModel):
     price: float
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class DumpsterTypeCreate(BaseModel):
+class DumpsterTypeUpdate(BaseModel):
     price: float
 
 class RentalNote(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_id: str
+    client_id: Optional[str] = None  # Optional for unregistered clients
     client_name: str
     client_address: str
+    client_phone: Optional[str] = ""
     dumpster_code: str
     dumpster_size: DumpsterSize
     rental_date: datetime
@@ -71,7 +88,10 @@ class RentalNote(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class RentalNoteCreate(BaseModel):
-    client_id: str
+    client_id: Optional[str] = None  # Optional for unregistered clients
+    client_name: Optional[str] = None  # For unregistered clients
+    client_address: Optional[str] = None  # For unregistered clients
+    client_phone: Optional[str] = ""
     dumpster_code: str
     dumpster_size: DumpsterSize
     rental_date: datetime
@@ -94,15 +114,19 @@ class PaymentCreate(BaseModel):
 
 class Receivable(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_id: str
+    client_id: Optional[str] = None
+    client_name: str
     rental_note_id: str
+    dumpster_code: str
     amount: float
     received_date: datetime
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ReceivableCreate(BaseModel):
-    client_id: str
+    client_id: Optional[str] = None
+    client_name: str
     rental_note_id: str
+    dumpster_code: str
     amount: float
     received_date: datetime
 
@@ -178,6 +202,23 @@ async def get_client(client_id: str):
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
     return Client(**parse_from_mongo(client))
 
+@api_router.put("/clients/{client_id}", response_model=Client)
+async def update_client(client_id: str, client_data: ClientUpdate):
+    update_data = {k: v for k, v in client_data.dict().items() if v is not None}
+    result = await db.clients.update_one({"id": client_id}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    
+    updated_client = await db.clients.find_one({"id": client_id})
+    return Client(**parse_from_mongo(updated_client))
+
+@api_router.delete("/clients/{client_id}")
+async def delete_client(client_id: str):
+    result = await db.clients.delete_one({"id": client_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    return {"message": "Cliente excluído com sucesso"}
+
 @api_router.get("/clients/{client_id}/stats")
 async def get_client_stats(client_id: str):
     # Get client rentals
@@ -200,7 +241,7 @@ async def get_dumpster_types():
     return [DumpsterType(**parse_from_mongo(dt)) for dt in types]
 
 @api_router.put("/dumpster-types/{size}")
-async def update_dumpster_price(size: str, price_data: DumpsterTypeCreate):
+async def update_dumpster_price(size: str, price_data: DumpsterTypeUpdate):
     result = await db.dumpster_types.update_one(
         {"size": size},
         {"$set": {"price": price_data.price}}
@@ -212,15 +253,23 @@ async def update_dumpster_price(size: str, price_data: DumpsterTypeCreate):
 # Rental notes endpoints
 @api_router.post("/rental-notes", response_model=RentalNote)
 async def create_rental_note(rental_data: RentalNoteCreate):
-    # Get client data
-    client = await db.clients.find_one({"id": rental_data.client_id})
-    if not client:
-        raise HTTPException(status_code=404, detail="Cliente não encontrado")
-    
-    # Create rental note with client data
     rental_dict = rental_data.dict()
-    rental_dict["client_name"] = client["name"]
-    rental_dict["client_address"] = client["address"]
+    
+    # Handle registered client
+    if rental_data.client_id:
+        client = await db.clients.find_one({"id": rental_data.client_id})
+        if not client:
+            raise HTTPException(status_code=404, detail="Cliente não encontrado")
+        rental_dict["client_name"] = client["name"]
+        rental_dict["client_address"] = client["address"]
+        rental_dict["client_phone"] = client.get("phone", "")
+    # Handle unregistered client
+    else:
+        if not rental_data.client_name or not rental_data.client_address:
+            raise HTTPException(status_code=400, detail="Nome e endereço são obrigatórios para clientes não cadastrados")
+        rental_dict["client_name"] = rental_data.client_name
+        rental_dict["client_address"] = rental_data.client_address
+        rental_dict["client_phone"] = rental_data.client_phone or ""
     
     rental_note = RentalNote(**rental_dict)
     await db.rental_notes.insert_one(prepare_for_mongo(rental_note.dict()))
@@ -236,6 +285,66 @@ async def get_rental_notes():
         result.append(rental_note)
     return result
 
+@api_router.get("/rental-notes/active")
+async def get_active_rental_notes():
+    notes = await db.rental_notes.find({"status": "active"}).to_list(length=None)
+    result = []
+    
+    for note in notes:
+        parsed_note = parse_from_mongo(note)
+        rental_note = RentalNote(**parsed_note)
+        
+        # Calculate color status
+        color_status = calculate_rental_status_color(
+            rental_note.rental_date, 
+            rental_note.status
+        )
+        
+        note_with_status = rental_note.dict()
+        note_with_status["color_status"] = color_status
+        result.append(note_with_status)
+    
+    return result
+
+@api_router.get("/rental-notes/retrieved")
+async def get_retrieved_rental_notes():
+    notes = await db.rental_notes.find({"status": "retrieved"}).to_list(length=None)
+    result = []
+    
+    for note in notes:
+        parsed_note = parse_from_mongo(note)
+        rental_note = RentalNote(**parsed_note)
+        
+        note_with_status = rental_note.dict()
+        note_with_status["color_status"] = "red"
+        result.append(note_with_status)
+    
+    return result
+
+@api_router.get("/rental-notes/overdue")
+async def get_overdue_rental_notes():
+    """Get rentals that are overdue (30+ days)"""
+    notes = await db.rental_notes.find({"status": "active"}).to_list(length=None)
+    result = []
+    
+    for note in notes:
+        parsed_note = parse_from_mongo(note)
+        rental_note = RentalNote(**parsed_note)
+        
+        # Calculate color status
+        color_status = calculate_rental_status_color(
+            rental_note.rental_date, 
+            rental_note.status
+        )
+        
+        # Only include purple (30+ days) rentals
+        if color_status == "purple":
+            note_with_status = rental_note.dict()
+            note_with_status["color_status"] = color_status
+            result.append(note_with_status)
+    
+    return result
+
 @api_router.put("/rental-notes/{note_id}/retrieve")
 async def mark_as_retrieved(note_id: str):
     result = await db.rental_notes.update_one(
@@ -248,13 +357,31 @@ async def mark_as_retrieved(note_id: str):
 
 @api_router.put("/rental-notes/{note_id}/pay")
 async def mark_as_paid(note_id: str):
-    result = await db.rental_notes.update_one(
+    # Get the rental note
+    rental = await db.rental_notes.find_one({"id": note_id})
+    if not rental:
+        raise HTTPException(status_code=404, detail="Nota não encontrada")
+    
+    # Mark as paid
+    await db.rental_notes.update_one(
         {"id": note_id},
         {"$set": {"is_paid": True}}
     )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Nota não encontrada")
-    return {"message": "Caçamba marcada como paga"}
+    
+    # Create automatic receivable record
+    receivable_data = {
+        "client_id": rental.get("client_id"),
+        "client_name": rental["client_name"],
+        "rental_note_id": note_id,
+        "dumpster_code": rental["dumpster_code"],
+        "amount": rental["price"],
+        "received_date": datetime.now(timezone.utc)
+    }
+    
+    receivable = Receivable(**receivable_data)
+    await db.receivables.insert_one(prepare_for_mongo(receivable.dict()))
+    
+    return {"message": "Caçamba marcada como paga e recebimento registrado"}
 
 @api_router.get("/rental-notes/with-status")
 async def get_rental_notes_with_status():
@@ -276,6 +403,92 @@ async def get_rental_notes_with_status():
         result.append(note_with_status)
     
     return result
+
+# Dashboard stats
+@api_router.get("/dashboard/stats")
+async def get_dashboard_stats():
+    # Get all data
+    clients = await db.clients.find().to_list(length=None)
+    rentals = await db.rental_notes.find().to_list(length=None)
+    payments = await db.payments.find().to_list(length=None)
+    
+    total_clients = len(clients)
+    active_rentals = len([r for r in rentals if r.get('status') == 'active'])
+    retrieved_rentals = len([r for r in rentals if r.get('status') == 'retrieved'])
+    total_payments = len(payments)
+    
+    # Calculate overdue rentals (30+ days)
+    overdue_count = 0
+    for rental in rentals:
+        if rental.get('status') == 'active':
+            rental_date = rental.get('rental_date')
+            if isinstance(rental_date, str):
+                try:
+                    rental_date = datetime.fromisoformat(rental_date.replace('Z', '+00:00'))
+                except:
+                    continue
+            
+            color_status = calculate_rental_status_color(rental_date, rental.get('status'))
+            if color_status == 'purple':
+                overdue_count += 1
+    
+    return {
+        "total_clients": total_clients,
+        "active_dumpsters": active_rentals,
+        "retrieved_dumpsters": retrieved_rentals,
+        "overdue_dumpsters": overdue_count,
+        "total_payments": total_payments
+    }
+
+# Financial endpoints
+@api_router.get("/financial/monthly-summary")
+async def get_monthly_financial_summary():
+    """Get current month financial summary"""
+    now = datetime.now(timezone.utc)
+    start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    # Get receivables for current month
+    receivables = await db.receivables.find({}).to_list(length=None)
+    monthly_receivables = []
+    total_received = 0
+    
+    for receivable in receivables:
+        received_date = receivable.get('received_date')
+        if isinstance(received_date, str):
+            try:
+                received_date = datetime.fromisoformat(received_date.replace('Z', '+00:00'))
+            except:
+                continue
+        
+        if received_date >= start_of_month:
+            monthly_receivables.append(parse_from_mongo(receivable))
+            total_received += receivable.get('amount', 0)
+    
+    # Get payments for current month
+    payments = await db.payments.find({}).to_list(length=None)
+    monthly_payments = []
+    total_paid = 0
+    
+    for payment in payments:
+        due_date = payment.get('due_date')
+        if isinstance(due_date, str):
+            try:
+                due_date = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+            except:
+                continue
+        
+        if due_date >= start_of_month:
+            monthly_payments.append(parse_from_mongo(payment))
+            total_paid += payment.get('amount', 0)
+    
+    return {
+        "month": now.strftime("%B %Y"),
+        "total_received": total_received,
+        "total_paid": total_paid,
+        "net_income": total_received - total_paid,
+        "receivables": monthly_receivables,
+        "payments": monthly_payments
+    }
 
 # Payment endpoints
 @api_router.post("/payments", response_model=Payment)

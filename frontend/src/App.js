@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 import axios from 'axios';
-import { Truck, Users, FileText, DollarSign, Settings, Plus, Search, Calendar, MapPin, Package } from 'lucide-react';
+import { Truck, Users, FileText, DollarSign, Settings, Plus, Search, Calendar, MapPin, Package, Edit2, Trash2, Phone, Mail, Clock } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
@@ -11,6 +11,7 @@ import { Label } from './components/ui/label';
 import { Textarea } from './components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
+import { Switch } from './components/ui/switch';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -20,9 +21,16 @@ function App() {
   const [clients, setClients] = useState([]);
   const [dumpsterTypes, setDumpsterTypes] = useState([]);
   const [rentalNotes, setRentalNotes] = useState([]);
+  const [activeRentals, setActiveRentals] = useState([]);
+  const [retrievedRentals, setRetrievedRentals] = useState([]);
+  const [overdueRentals, setOverdueRentals] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [receivables, setReceivables] = useState([]);
+  const [monthlyFinancial, setMonthlyFinancial] = useState(null);
+  const [dashboardStats, setDashboardStats] = useState({});
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [editingClient, setEditingClient] = useState(null);
 
   // Dialog states
   const [clientDialog, setClientDialog] = useState(false);
@@ -30,17 +38,31 @@ function App() {
   const [paymentDialog, setPaymentDialog] = useState(false);
   const [priceDialog, setPriceDialog] = useState(false);
   const [clientStatsDialog, setClientStatsDialog] = useState(false);
+  const [financialDialog, setFinancialDialog] = useState(false);
+  const [editClientDialog, setEditClientDialog] = useState(false);
   const [selectedClientStats, setSelectedClientStats] = useState(null);
+  const [selectedDumpsterType, setSelectedDumpsterType] = useState(null);
 
   // Form states
-  const [newClient, setNewClient] = useState({ name: '', address: '' });
+  const [newClient, setNewClient] = useState({ 
+    name: '', 
+    address: '', 
+    phone: '', 
+    email: '', 
+    additional_address: '', 
+    notes: '' 
+  });
   const [newRental, setNewRental] = useState({
     client_id: '',
+    client_name: '',
+    client_address: '',
+    client_phone: '',
     dumpster_code: '',
     dumpster_size: '',
     rental_date: '',
     description: '',
-    price: 0
+    price: 0,
+    use_unregistered_client: false
   });
   const [newPayment, setNewPayment] = useState({
     account_name: '',
@@ -48,6 +70,10 @@ function App() {
     due_date: '',
     description: ''
   });
+  const [newPrice, setNewPrice] = useState(0);
+
+  // Rental view states
+  const [rentalViewMode, setRentalViewMode] = useState('all'); // 'all', 'active', 'retrieved'
 
   // Fetch data functions
   const fetchClients = async () => {
@@ -72,6 +98,16 @@ function App() {
     try {
       const response = await axios.get(`${API}/rental-notes/with-status`);
       setRentalNotes(response.data);
+      
+      // Also fetch separated lists
+      const activeResponse = await axios.get(`${API}/rental-notes/active`);
+      setActiveRentals(activeResponse.data);
+      
+      const retrievedResponse = await axios.get(`${API}/rental-notes/retrieved`);
+      setRetrievedRentals(retrievedResponse.data);
+      
+      const overdueResponse = await axios.get(`${API}/rental-notes/overdue`);
+      setOverdueRentals(overdueResponse.data);
     } catch (error) {
       console.error('Erro ao buscar notas de locação:', error);
     }
@@ -86,25 +122,104 @@ function App() {
     }
   };
 
+  const fetchReceivables = async () => {
+    try {
+      const response = await axios.get(`${API}/receivables`);
+      setReceivables(response.data);
+    } catch (error) {
+      console.error('Erro ao buscar recebimentos:', error);
+    }
+  };
+
+  const fetchDashboardStats = async () => {
+    try {
+      const response = await axios.get(`${API}/dashboard/stats`);
+      setDashboardStats(response.data);
+    } catch (error) {
+      console.error('Erro ao buscar estatísticas:', error);
+    }
+  };
+
+  const fetchMonthlyFinancial = async () => {
+    try {
+      const response = await axios.get(`${API}/financial/monthly-summary`);
+      setMonthlyFinancial(response.data);
+    } catch (error) {
+      console.error('Erro ao buscar resumo financeiro:', error);
+    }
+  };
+
   useEffect(() => {
     fetchClients();
     fetchDumpsterTypes();
     fetchRentalNotes();
     fetchPayments();
+    fetchReceivables();
+    fetchDashboardStats();
+    fetchMonthlyFinancial();
   }, []);
 
   // Create functions
   const createClient = async () => {
+    if (!newClient.name || !newClient.address) {
+      alert('Nome e endereço são obrigatórios');
+      return;
+    }
+    
     try {
       setLoading(true);
       await axios.post(`${API}/clients`, newClient);
-      setNewClient({ name: '', address: '' });
+      setNewClient({ 
+        name: '', 
+        address: '', 
+        phone: '', 
+        email: '', 
+        additional_address: '', 
+        notes: '' 
+      });
       setClientDialog(false);
       fetchClients();
+      fetchDashboardStats();
     } catch (error) {
       console.error('Erro ao criar cliente:', error);
+      alert('Erro ao criar cliente');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const updateClient = async () => {
+    if (!editingClient.name || !editingClient.address) {
+      alert('Nome e endereço são obrigatórios');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      await axios.put(`${API}/clients/${editingClient.id}`, editingClient);
+      setEditClientDialog(false);
+      setEditingClient(null);
+      fetchClients();
+    } catch (error) {
+      console.error('Erro ao atualizar cliente:', error);
+      alert('Erro ao atualizar cliente');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteClient = async (clientId) => {
+    if (!confirm('Tem certeza que deseja excluir este cliente?')) {
+      return;
+    }
+    
+    try {
+      await axios.delete(`${API}/clients/${clientId}`);
+      fetchClients();
+      fetchDashboardStats();
+    } catch (error) {
+      console.error('Erro ao excluir cliente:', error);
+      alert('Erro ao excluir cliente');
     }
   };
 
@@ -112,24 +227,57 @@ function App() {
     try {
       setLoading(true);
       const selectedDumpster = dumpsterTypes.find(dt => dt.size === newRental.dumpster_size);
-      const rentalData = {
-        ...newRental,
-        price: selectedDumpster?.price || newRental.price,
-        rental_date: new Date(newRental.rental_date).toISOString()
-      };
+      let rentalData;
+      
+      if (newRental.use_unregistered_client) {
+        if (!newRental.client_name || !newRental.client_address) {
+          alert('Nome e endereço do cliente são obrigatórios');
+          return;
+        }
+        rentalData = {
+          client_name: newRental.client_name,
+          client_address: newRental.client_address,
+          client_phone: newRental.client_phone,
+          dumpster_code: newRental.dumpster_code,
+          dumpster_size: newRental.dumpster_size,
+          rental_date: new Date(newRental.rental_date).toISOString(),
+          description: newRental.description,
+          price: selectedDumpster?.price || newRental.price
+        };
+      } else {
+        if (!newRental.client_id) {
+          alert('Selecione um cliente');
+          return;
+        }
+        rentalData = {
+          client_id: newRental.client_id,
+          dumpster_code: newRental.dumpster_code,
+          dumpster_size: newRental.dumpster_size,
+          rental_date: new Date(newRental.rental_date).toISOString(),
+          description: newRental.description,
+          price: selectedDumpster?.price || newRental.price
+        };
+      }
+      
       await axios.post(`${API}/rental-notes`, rentalData);
       setNewRental({
         client_id: '',
+        client_name: '',
+        client_address: '',
+        client_phone: '',
         dumpster_code: '',
         dumpster_size: '',
         rental_date: '',
         description: '',
-        price: 0
+        price: 0,
+        use_unregistered_client: false
       });
       setRentalDialog(false);
       fetchRentalNotes();
+      fetchDashboardStats();
     } catch (error) {
       console.error('Erro ao criar nota de locação:', error);
+      alert('Erro ao criar locação');
     } finally {
       setLoading(false);
     }
@@ -151,8 +299,28 @@ function App() {
       });
       setPaymentDialog(false);
       fetchPayments();
+      fetchMonthlyFinancial();
     } catch (error) {
       console.error('Erro ao criar pagamento:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateDumpsterPrice = async () => {
+    try {
+      setLoading(true);
+      await axios.put(`${API}/dumpster-types/${selectedDumpsterType.size}`, {
+        price: newPrice
+      });
+      setPriceDialog(false);
+      setSelectedDumpsterType(null);
+      setNewPrice(0);
+      fetchDumpsterTypes();
+      alert('Preço atualizado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao atualizar preço:', error);
+      alert('Erro ao atualizar preço');
     } finally {
       setLoading(false);
     }
@@ -162,6 +330,7 @@ function App() {
     try {
       await axios.put(`${API}/rental-notes/${noteId}/retrieve`);
       fetchRentalNotes();
+      fetchDashboardStats();
     } catch (error) {
       console.error('Erro ao marcar como retirada:', error);
     }
@@ -171,6 +340,10 @@ function App() {
     try {
       await axios.put(`${API}/rental-notes/${noteId}/pay`);
       fetchRentalNotes();
+      fetchReceivables();
+      fetchMonthlyFinancial();
+      fetchDashboardStats();
+      alert('Caçamba marcada como paga e recebimento registrado automaticamente!');
     } catch (error) {
       console.error('Erro ao marcar como paga:', error);
     }
@@ -206,16 +379,38 @@ function App() {
     }
   };
 
-  const filteredRentals = rentalNotes.filter(rental => 
-    rental.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    rental.client_address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    rental.dumpster_code.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredRentals = () => {
+    let rentalsToFilter = rentalNotes;
+    
+    if (rentalViewMode === 'active') {
+      rentalsToFilter = activeRentals;
+    } else if (rentalViewMode === 'retrieved') {
+      rentalsToFilter = retrievedRentals;
+    }
+    
+    return rentalsToFilter.filter(rental => 
+      rental.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rental.client_address.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rental.dumpster_code.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  };
 
   const filteredClients = clients.filter(client =>
     client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.address.toLowerCase().includes(searchTerm.toLowerCase())
+    client.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (client.phone && client.phone.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  const openPriceDialog = (dumpsterType) => {
+    setSelectedDumpsterType(dumpsterType);
+    setNewPrice(dumpsterType.price);
+    setPriceDialog(true);
+  };
+
+  const openEditClientDialog = (client) => {
+    setEditingClient({...client});
+    setEditClientDialog(true);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -264,40 +459,67 @@ function App() {
 
           {/* Dashboard Tab */}
           <TabsContent value="dashboard" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+              <Card 
+                className="bg-gradient-to-r from-blue-500 to-blue-600 text-white cursor-pointer hover:shadow-lg transition-shadow"
+                onClick={() => setActiveTab('clients')}
+              >
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium opacity-90">Total Clientes</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold">{clients.length}</div>
+                  <div className="text-3xl font-bold">{dashboardStats.total_clients || 0}</div>
                 </CardContent>
               </Card>
               
-              <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
+              <Card 
+                className="bg-gradient-to-r from-green-500 to-green-600 text-white cursor-pointer hover:shadow-lg transition-shadow"
+                onClick={() => {
+                  setActiveTab('rentals');
+                  setRentalViewMode('active');
+                }}
+              >
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium opacity-90">Caçambas Ativas</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold">{rentalNotes.filter(r => r.status === 'active').length}</div>
+                  <div className="text-3xl font-bold">{dashboardStats.active_dumpsters || 0}</div>
                 </CardContent>
               </Card>
               
-              <Card className="bg-gradient-to-r from-orange-500 to-orange-600 text-white">
+              <Card 
+                className="bg-gradient-to-r from-orange-500 to-orange-600 text-white cursor-pointer hover:shadow-lg transition-shadow"
+                onClick={() => {
+                  setActiveTab('rentals');
+                  setRentalViewMode('retrieved');
+                }}
+              >
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium opacity-90">Caçambas Retiradas</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold">{rentalNotes.filter(r => r.status === 'retrieved').length}</div>
+                  <div className="text-3xl font-bold">{dashboardStats.retrieved_dumpsters || 0}</div>
                 </CardContent>
               </Card>
               
-              <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white">
+              <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white cursor-pointer hover:shadow-lg transition-shadow">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium opacity-90">Total Pagamentos</CardTitle>
+                  <CardTitle className="text-sm font-medium opacity-90">Caçambas 30+ Dias</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold">{payments.length}</div>
+                  <div className="text-3xl font-bold">{dashboardStats.overdue_dumpsters || 0}</div>
+                </CardContent>
+              </Card>
+              
+              <Card 
+                className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white cursor-pointer hover:shadow-lg transition-shadow"
+                onClick={() => setFinancialDialog(true)}
+              >
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium opacity-90">Ver Financeiro</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-lg font-bold">Resumo Mensal</div>
                 </CardContent>
               </Card>
             </div>
@@ -349,25 +571,64 @@ function App() {
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Adicionar Novo Cliente</DialogTitle>
-                    <DialogDescription>Preencha os dados do cliente abaixo.</DialogDescription>
+                    <DialogDescription>Preencha os dados do cliente. Nome e endereço são obrigatórios.</DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="client-name">Nome</Label>
-                      <Input
-                        id="client-name"
-                        value={newClient.name}
-                        onChange={(e) => setNewClient({...newClient, name: e.target.value})}
-                        placeholder="Nome do cliente"
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="client-name">Nome *</Label>
+                        <Input
+                          id="client-name"
+                          value={newClient.name}
+                          onChange={(e) => setNewClient({...newClient, name: e.target.value})}
+                          placeholder="Nome do cliente"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="client-phone">Telefone</Label>
+                        <Input
+                          id="client-phone"
+                          value={newClient.phone}
+                          onChange={(e) => setNewClient({...newClient, phone: e.target.value})}
+                          placeholder="(11) 99999-9999"
+                        />
+                      </div>
                     </div>
                     <div>
-                      <Label htmlFor="client-address">Endereço</Label>
+                      <Label htmlFor="client-address">Endereço *</Label>
                       <Input
                         id="client-address"
                         value={newClient.address}
                         onChange={(e) => setNewClient({...newClient, address: e.target.value})}
-                        placeholder="Endereço do cliente"
+                        placeholder="Endereço principal"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="client-additional-address">Endereço Adicional</Label>
+                      <Input
+                        id="client-additional-address"
+                        value={newClient.additional_address}
+                        onChange={(e) => setNewClient({...newClient, additional_address: e.target.value})}
+                        placeholder="Endereço secundário (opcional)"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="client-email">Email</Label>
+                      <Input
+                        id="client-email"
+                        type="email"
+                        value={newClient.email}
+                        onChange={(e) => setNewClient({...newClient, email: e.target.value})}
+                        placeholder="email@exemplo.com"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="client-notes">Observações</Label>
+                      <Textarea
+                        id="client-notes"
+                        value={newClient.notes}
+                        onChange={(e) => setNewClient({...newClient, notes: e.target.value})}
+                        placeholder="Observações sobre o cliente"
                       />
                     </div>
                     <Button onClick={createClient} disabled={loading} className="w-full">
@@ -380,18 +641,56 @@ function App() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredClients.map((client) => (
-                <Card key={client.id} className="hover:shadow-lg transition-shadow cursor-pointer"
-                      onClick={() => getClientStats(client.id)}>
+                <Card key={client.id} className="hover:shadow-lg transition-shadow">
                   <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                      <Users className="h-5 w-5 text-blue-600" />
-                      <span>{client.name}</span>
-                    </CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center space-x-2">
+                        <Users className="h-5 w-5 text-blue-600" />
+                        <span>{client.name}</span>
+                      </CardTitle>
+                      <div className="flex space-x-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditClientDialog(client);
+                          }}
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 hover:text-red-700"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteClient(client.id);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
                   </CardHeader>
-                  <CardContent>
-                    <div className="flex items-start space-x-2">
-                      <MapPin className="h-4 w-4 text-gray-400 mt-1" />
-                      <p className="text-sm text-gray-600">{client.address}</p>
+                  <CardContent className="cursor-pointer" onClick={() => getClientStats(client.id)}>
+                    <div className="space-y-2">
+                      <div className="flex items-start space-x-2">
+                        <MapPin className="h-4 w-4 text-gray-400 mt-1" />
+                        <p className="text-sm text-gray-600">{client.address}</p>
+                      </div>
+                      {client.phone && (
+                        <div className="flex items-center space-x-2">
+                          <Phone className="h-4 w-4 text-gray-400" />
+                          <p className="text-sm text-gray-600">{client.phone}</p>
+                        </div>
+                      )}
+                      {client.email && (
+                        <div className="flex items-center space-x-2">
+                          <Mail className="h-4 w-4 text-gray-400" />
+                          <p className="text-sm text-gray-600">{client.email}</p>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -402,14 +701,40 @@ function App() {
           {/* Rentals Tab */}
           <TabsContent value="rentals" className="space-y-6">
             <div className="flex justify-between items-center">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Pesquisar por cliente, endereço ou código..."
-                  className="pl-10 w-80"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+              <div className="flex items-center space-x-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="Pesquisar por cliente, endereço ou código..."
+                    className="pl-10 w-80"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                
+                <div className="flex space-x-2">
+                  <Button
+                    variant={rentalViewMode === 'all' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setRentalViewMode('all')}
+                  >
+                    Todas
+                  </Button>
+                  <Button
+                    variant={rentalViewMode === 'active' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setRentalViewMode('active')}
+                  >
+                    Ativas ({activeRentals.length})
+                  </Button>
+                  <Button
+                    variant={rentalViewMode === 'retrieved' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setRentalViewMode('retrieved')}
+                  >
+                    Retiradas ({retrievedRentals.length})
+                  </Button>
+                </div>
               </div>
               
               <Dialog open={rentalDialog} onOpenChange={setRentalDialog}>
@@ -419,48 +744,92 @@ function App() {
                     Nova Locação
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="max-w-2xl">
                   <DialogHeader>
                     <DialogTitle>Adicionar Nova Locação</DialogTitle>
                     <DialogDescription>Preencha os dados da locação abaixo.</DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="rental-client">Cliente</Label>
-                      <Select value={newRental.client_id} onValueChange={(value) => setNewRental({...newRental, client_id: value})}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione um cliente" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {clients.map((client) => (
-                            <SelectItem key={client.id} value={client.id}>
-                              {client.name} - {client.address}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="dumpster-code">Código da Caçamba</Label>
-                      <Input
-                        id="dumpster-code"
-                        value={newRental.dumpster_code}
-                        onChange={(e) => setNewRental({...newRental, dumpster_code: e.target.value})}
-                        placeholder="Ex: CAC001"
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="unregistered-client"
+                        checked={newRental.use_unregistered_client}
+                        onCheckedChange={(checked) => setNewRental({...newRental, use_unregistered_client: checked})}
                       />
+                      <Label htmlFor="unregistered-client">Cliente não cadastrado</Label>
                     </div>
-                    <div>
-                      <Label htmlFor="dumpster-size">Tamanho da Caçamba</Label>
-                      <Select value={newRental.dumpster_size} onValueChange={(value) => setNewRental({...newRental, dumpster_size: value})}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o tamanho" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Pequena">Pequena (1m³)</SelectItem>
-                          <SelectItem value="Média">Média (2,5m³)</SelectItem>
-                          <SelectItem value="Grande">Grande (5m³)</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    
+                    {newRental.use_unregistered_client ? (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="rental-client-name">Nome do Cliente</Label>
+                          <Input
+                            id="rental-client-name"
+                            value={newRental.client_name}
+                            onChange={(e) => setNewRental({...newRental, client_name: e.target.value})}
+                            placeholder="Nome do cliente"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="rental-client-phone">Telefone</Label>
+                          <Input
+                            id="rental-client-phone"
+                            value={newRental.client_phone}
+                            onChange={(e) => setNewRental({...newRental, client_phone: e.target.value})}
+                            placeholder="(11) 99999-9999"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Label htmlFor="rental-client-address">Endereço do Cliente</Label>
+                          <Input
+                            id="rental-client-address"
+                            value={newRental.client_address}
+                            onChange={(e) => setNewRental({...newRental, client_address: e.target.value})}
+                            placeholder="Endereço do cliente"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <Label htmlFor="rental-client">Cliente</Label>
+                        <Select value={newRental.client_id} onValueChange={(value) => setNewRental({...newRental, client_id: value})}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione um cliente" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {clients.map((client) => (
+                              <SelectItem key={client.id} value={client.id}>
+                                {client.name} - {client.address}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="dumpster-code">Código da Caçamba</Label>
+                        <Input
+                          id="dumpster-code"
+                          value={newRental.dumpster_code}
+                          onChange={(e) => setNewRental({...newRental, dumpster_code: e.target.value})}
+                          placeholder="Ex: CAC001"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="dumpster-size">Tamanho da Caçamba</Label>
+                        <Select value={newRental.dumpster_size} onValueChange={(value) => setNewRental({...newRental, dumpster_size: value})}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione o tamanho" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Pequena">Pequena (1m³)</SelectItem>
+                            <SelectItem value="Média">Média (2,5m³)</SelectItem>
+                            <SelectItem value="Grande">Grande (5m³)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <div>
                       <Label htmlFor="rental-date">Data de Locação</Label>
@@ -489,7 +858,7 @@ function App() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {filteredRentals.map((rental) => (
+              {filteredRentals().map((rental) => (
                 <Card key={rental.id} className={`border-2 ${getStatusColor(rental.color_status)} transition-all hover:shadow-lg`}>
                   <CardHeader>
                     <CardTitle className="flex items-center justify-between">
@@ -506,6 +875,12 @@ function App() {
                         <MapPin className="h-4 w-4 mr-1" />
                         {rental.client_address}
                       </p>
+                      {rental.client_phone && (
+                        <p className="text-sm text-gray-600 flex items-center">
+                          <Phone className="h-4 w-4 mr-1" />
+                          {rental.client_phone}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center space-x-4 text-sm text-gray-600">
                       <span>Tamanho: {rental.dumpster_size}</span>
@@ -541,7 +916,11 @@ function App() {
 
           {/* Financial Tab */}
           <TabsContent value="financial" className="space-y-6">
-            <div className="flex justify-end">
+            <div className="flex justify-between items-center">
+              <Button onClick={() => setFinancialDialog(true)}>
+                Ver Resumo Mensal Completo
+              </Button>
+              
               <Dialog open={paymentDialog} onOpenChange={setPaymentDialog}>
                 <DialogTrigger asChild>
                   <Button className="bg-purple-600 hover:bg-purple-700">
@@ -603,6 +982,31 @@ function App() {
 
             <Card>
               <CardHeader>
+                <CardTitle>Recebimentos Automáticos</CardTitle>
+                <CardDescription>Recebimentos registrados automaticamente quando caçambas são marcadas como pagas</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {receivables.slice(0, 10).map((receivable) => (
+                    <div key={receivable.id} className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                      <div>
+                        <p className="font-medium">{receivable.client_name}</p>
+                        <p className="text-sm text-gray-600">Caçamba: {receivable.dumpster_code}</p>
+                        <p className="text-xs text-gray-500">
+                          Recebido em: {new Date(receivable.received_date).toLocaleDateString('pt-BR')}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-green-600">R$ {receivable.amount.toFixed(2)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
                 <CardTitle>Pagamentos Registrados</CardTitle>
                 <CardDescription>Lista de todos os pagamentos do sistema</CardDescription>
               </CardHeader>
@@ -632,7 +1036,7 @@ function App() {
             <Card>
               <CardHeader>
                 <CardTitle>Configuração de Preços</CardTitle>
-                <CardDescription>Gerencie os preços das caçambas por tamanho</CardDescription>
+                <CardDescription>Gerencie os preços das caçambas por tamanho - clique em "Alterar Preço" para modificar</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -648,7 +1052,12 @@ function App() {
                             <Label>Preço Atual</Label>
                             <p className="text-2xl font-bold text-green-600">R$ {type.price.toFixed(2)}</p>
                           </div>
-                          <Button variant="outline" size="sm" className="w-full">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="w-full"
+                            onClick={() => openPriceDialog(type)}
+                          >
                             Alterar Preço
                           </Button>
                         </div>
@@ -682,6 +1091,168 @@ function App() {
                 <div>
                   <p className="text-2xl font-bold text-orange-600">{selectedClientStats.open_dumpsters}</p>
                   <p className="text-sm text-gray-600">Em Aberto</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Client Dialog */}
+      <Dialog open={editClientDialog} onOpenChange={setEditClientDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Cliente</DialogTitle>
+            <DialogDescription>Altere os dados do cliente. Nome e endereço são obrigatórios.</DialogDescription>
+          </DialogHeader>
+          {editingClient && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="edit-client-name">Nome *</Label>
+                  <Input
+                    id="edit-client-name"
+                    value={editingClient.name}
+                    onChange={(e) => setEditingClient({...editingClient, name: e.target.value})}
+                    placeholder="Nome do cliente"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-client-phone">Telefone</Label>
+                  <Input
+                    id="edit-client-phone"
+                    value={editingClient.phone || ''}
+                    onChange={(e) => setEditingClient({...editingClient, phone: e.target.value})}
+                    placeholder="(11) 99999-9999"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="edit-client-address">Endereço *</Label>
+                <Input
+                  id="edit-client-address"
+                  value={editingClient.address}
+                  onChange={(e) => setEditingClient({...editingClient, address: e.target.value})}
+                  placeholder="Endereço principal"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-client-additional-address">Endereço Adicional</Label>
+                <Input
+                  id="edit-client-additional-address"
+                  value={editingClient.additional_address || ''}
+                  onChange={(e) => setEditingClient({...editingClient, additional_address: e.target.value})}
+                  placeholder="Endereço secundário (opcional)"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-client-email">Email</Label>
+                <Input
+                  id="edit-client-email"
+                  type="email"
+                  value={editingClient.email || ''}
+                  onChange={(e) => setEditingClient({...editingClient, email: e.target.value})}
+                  placeholder="email@exemplo.com"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-client-notes">Observações</Label>
+                <Textarea
+                  id="edit-client-notes"
+                  value={editingClient.notes || ''}
+                  onChange={(e) => setEditingClient({...editingClient, notes: e.target.value})}
+                  placeholder="Observações sobre o cliente"
+                />
+              </div>
+              <Button onClick={updateClient} disabled={loading} className="w-full">
+                {loading ? 'Salvando...' : 'Salvar Alterações'}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Price Dialog */}
+      <Dialog open={priceDialog} onOpenChange={setPriceDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Alterar Preço - {selectedDumpsterType?.size}</DialogTitle>
+            <DialogDescription>Digite o novo preço para {selectedDumpsterType?.volume}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="new-price">Novo Preço (R$)</Label>
+              <Input
+                id="new-price"
+                type="number"
+                step="0.01"
+                value={newPrice}
+                onChange={(e) => setNewPrice(parseFloat(e.target.value))}
+                placeholder="0.00"
+              />
+            </div>
+            <Button onClick={updateDumpsterPrice} disabled={loading} className="w-full">
+              {loading ? 'Atualizando...' : 'Atualizar Preço'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Financial Summary Dialog */}
+      <Dialog open={financialDialog} onOpenChange={setFinancialDialog}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Resumo Financeiro - {monthlyFinancial?.month}</DialogTitle>
+            <DialogDescription>Relatório completo de recebimentos e pagamentos do mês</DialogDescription>
+          </DialogHeader>
+          {monthlyFinancial && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <Card className="bg-green-50">
+                  <CardContent className="p-4">
+                    <p className="text-2xl font-bold text-green-600">R$ {monthlyFinancial.total_received.toFixed(2)}</p>
+                    <p className="text-sm text-gray-600">Total Recebido</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-red-50">
+                  <CardContent className="p-4">
+                    <p className="text-2xl font-bold text-red-600">R$ {monthlyFinancial.total_paid.toFixed(2)}</p>
+                    <p className="text-sm text-gray-600">Total Pago</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-blue-50">
+                  <CardContent className="p-4">
+                    <p className="text-2xl font-bold text-blue-600">R$ {monthlyFinancial.net_income.toFixed(2)}</p>
+                    <p className="text-sm text-gray-600">Receita Líquida</p>
+                  </CardContent>
+                </Card>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-lg font-semibold text-green-600 mb-3">Recebimentos do Mês</h3>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {monthlyFinancial.receivables.map((receivable) => (
+                      <div key={receivable.id} className="p-2 bg-green-50 rounded text-sm">
+                        <p className="font-medium">{receivable.client_name}</p>
+                        <p className="text-gray-600">Caçamba: {receivable.dumpster_code}</p>
+                        <p className="text-green-600 font-bold">R$ {receivable.amount.toFixed(2)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="text-lg font-semibold text-red-600 mb-3">Pagamentos do Mês</h3>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {monthlyFinancial.payments.map((payment) => (
+                      <div key={payment.id} className="p-2 bg-red-50 rounded text-sm">
+                        <p className="font-medium">{payment.account_name}</p>
+                        <p className="text-gray-600">{payment.description}</p>
+                        <p className="text-red-600 font-bold">R$ {payment.amount.toFixed(2)}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
