@@ -130,6 +130,11 @@ def calculate_rental_status_color(rental_date: datetime, status: str):
         return "red"
     
     now = datetime.now(timezone.utc)
+    
+    # Ensure rental_date has timezone info
+    if rental_date.tzinfo is None:
+        rental_date = rental_date.replace(tzinfo=timezone.utc)
+    
     days_diff = (now - rental_date).days
     
     if days_diff <= 7:
