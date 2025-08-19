@@ -1219,6 +1219,39 @@ function App() {
               </Dialog>
             </div>
 
+            {/* Financial Summary Cards */}
+            {monthlyFinancial && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card className="bg-green-50">
+                  <CardHeader>
+                    <CardTitle className="text-green-700">Recebido no Mês</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-green-600">R$ {monthlyFinancial.total_received.toFixed(2)}</p>
+                    <p className="text-sm text-gray-600">{monthlyFinancial.month}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-red-50">
+                  <CardHeader>
+                    <CardTitle className="text-red-700">Pago no Mês</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-red-600">R$ {monthlyFinancial.total_paid.toFixed(2)}</p>
+                    <p className="text-sm text-gray-600">{monthlyFinancial.month}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-blue-50">
+                  <CardHeader>
+                    <CardTitle className="text-blue-700">Receita Líquida</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-blue-600">R$ {monthlyFinancial.net_income.toFixed(2)}</p>
+                    <p className="text-sm text-gray-600">{monthlyFinancial.month}</p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
             <Card>
               <CardHeader>
                 <CardTitle>Recebimentos Automáticos</CardTitle>
@@ -1226,7 +1259,7 @@ function App() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {receivables.slice(0, 10).map((receivable) => (
+                  {receivables.length > 0 ? receivables.slice(0, 10).map((receivable) => (
                     <div key={receivable.id} className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
                       <div>
                         <p className="font-medium">{receivable.client_name}</p>
@@ -1239,7 +1272,9 @@ function App() {
                         <p className="font-bold text-green-600">R$ {receivable.amount.toFixed(2)}</p>
                       </div>
                     </div>
-                  ))}
+                  )) : (
+                    <p className="text-gray-500 text-center py-4">Nenhum recebimento registrado</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -1251,7 +1286,7 @@ function App() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {payments.map((payment) => (
+                  {payments.length > 0 ? payments.map((payment) => (
                     <div key={payment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div>
                         <p className="font-medium">{payment.account_name}</p>
@@ -1264,7 +1299,9 @@ function App() {
                         <p className="font-bold text-red-600">R$ {payment.amount.toFixed(2)}</p>
                       </div>
                     </div>
-                  ))}
+                  )) : (
+                    <p className="text-gray-500 text-center py-4">Nenhum pagamento registrado</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
