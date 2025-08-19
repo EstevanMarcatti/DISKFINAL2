@@ -400,6 +400,34 @@ async def mark_as_retrieved(note_id: str):
         raise HTTPException(status_code=404, detail="Nota não encontrada")
     return {"message": "Caçamba marcada como retirada"}
 
+@api_router.put("/rental-notes/{note_id}/pay")
+async def mark_as_paid(note_id: str):
+    # Get the rental note
+    rental = await db.rental_notes.find_one({"id": note_id})
+    if not rental:
+        raise HTTPException(status_code=404, detail="Nota não encontrada")
+    
+    # Mark as paid
+    await db.rental_notes.update_one(
+        {"id": note_id},
+        {"$set": {"is_paid": True}}
+    )
+    
+    # Create automatic receivable record
+    receivable_data = {
+        "client_id": rental.get("client_id"),
+        "client_name": rental["client_name"],
+        "rental_note_id": note_id,
+        "dumpster_code": rental["dumpster_code"],
+        "amount": rental["price"],
+        "received_date": datetime.now(timezone.utc)
+    }
+    
+    receivable = Receivable(**receivable_data)
+    await db.receivables.insert_one(prepare_for_mongo(receivable.dict()))
+    
+    return {"message": "Caçamba marcada como paga e recebimento registrado"}
+
 @api_router.put("/rental-notes/{note_id}/coordinates")
 async def update_rental_coordinates(note_id: str, latitude: float, longitude: float):
     """Update coordinates for a rental note"""
