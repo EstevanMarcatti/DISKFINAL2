@@ -1293,17 +1293,101 @@ function App() {
             <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-bold">Mapa de Caçambas - Itapira, SP</h2>
-                <p className="text-gray-600">Visualização em tempo real das caçambas no mapa com status por cores</p>
+                <p className="text-gray-600">Mapa interativo com pesquisa de endereços e gestão de rotas</p>
               </div>
               
               <div className="flex space-x-2">
+                <Dialog open={landfillDialog} onOpenChange={setLandfillDialog}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-blue-600 hover:bg-blue-700">
+                      <Factory className="h-4 w-4 mr-2" />
+                      Adicionar Aterro
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Adicionar Novo Aterro</DialogTitle>
+                      <DialogDescription>Cadastre um novo aterro no sistema</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="landfill-name">Nome do Aterro</Label>
+                        <Input
+                          id="landfill-name"
+                          value={newLandfill.name}
+                          onChange={(e) => setNewLandfill({...newLandfill, name: e.target.value})}
+                          placeholder="Ex: Aterro Central Itapira"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="landfill-address">Endereço</Label>
+                        <Input
+                          id="landfill-address"
+                          value={newLandfill.address}
+                          onChange={(e) => setNewLandfill({...newLandfill, address: e.target.value})}
+                          placeholder="Endereço completo"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="landfill-lat">Latitude</Label>
+                          <Input
+                            id="landfill-lat"
+                            type="number"
+                            step="any"
+                            value={newLandfill.latitude}
+                            onChange={(e) => setNewLandfill({...newLandfill, latitude: e.target.value})}
+                            placeholder="-22.4386"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="landfill-lng">Longitude</Label>
+                          <Input
+                            id="landfill-lng"
+                            type="number"
+                            step="any"
+                            value={newLandfill.longitude}
+                            onChange={(e) => setNewLandfill({...newLandfill, longitude: e.target.value})}
+                            placeholder="-46.8289"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="landfill-capacity">Capacidade (m³)</Label>
+                        <Input
+                          id="landfill-capacity"
+                          type="number"
+                          value={newLandfill.capacity}
+                          onChange={(e) => setNewLandfill({...newLandfill, capacity: e.target.value})}
+                          placeholder="1000"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="landfill-description">Descrição</Label>
+                        <Textarea
+                          id="landfill-description"
+                          value={newLandfill.description}
+                          onChange={(e) => setNewLandfill({...newLandfill, description: e.target.value})}
+                          placeholder="Observações sobre o aterro"
+                        />
+                      </div>
+                      <Button onClick={createLandfill} disabled={loading} className="w-full">
+                        {loading ? 'Salvando...' : 'Salvar Aterro'}
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
                 <Button 
                   onClick={() => setAddingMarker(!addingMarker)}
                   variant={addingMarker ? "destructive" : "default"}
                 >
-                  {addingMarker ? 'Cancelar' : 'Adicionar Ponto Manual'}
+                  <MapPin className="h-4 w-4 mr-2" />
+                  {addingMarker ? 'Cancelar Marcação' : 'Adicionar Ponto'}
                 </Button>
+
                 <Button onClick={fetchMapData} variant="outline">
+                  <Package className="h-4 w-4 mr-2" />
                   Atualizar Mapa
                 </Button>
               </div>
@@ -1312,71 +1396,71 @@ function App() {
             {/* Map Legend */}
             <Card>
               <CardHeader>
-                <CardTitle>Legenda do Mapa</CardTitle>
+                <CardTitle>Legenda e Estatísticas</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-wrap gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
                   <div className="flex items-center space-x-2">
                     <div className="w-4 h-4 bg-green-500 rounded-full"></div>
-                    <span className="text-sm">Verde: No Prazo (0-7 dias)</span>
+                    <div>
+                      <div className="font-medium">{mapData.filter(r => r.color_status === 'green').length}</div>
+                      <div className="text-xs text-gray-600">No Prazo</div>
+                    </div>
                   </div>
                   <div className="flex items-center space-x-2">
                     <div className="w-4 h-4 bg-yellow-500 rounded-full"></div>
-                    <span className="text-sm">Amarelo: Vencida (7-30 dias)</span>
+                    <div>
+                      <div className="font-medium">{mapData.filter(r => r.color_status === 'yellow').length}</div>
+                      <div className="text-xs text-gray-600">Vencidas</div>
+                    </div>
                   </div>
                   <div className="flex items-center space-x-2">
                     <div className="w-4 h-4 bg-red-500 rounded-full"></div>
-                    <span className="text-sm">Vermelho: Retirada</span>
+                    <div>
+                      <div className="font-medium">{mapData.filter(r => r.color_status === 'red').length}</div>
+                      <div className="text-xs text-gray-600">Retiradas</div>
+                    </div>
                   </div>
                   <div className="flex items-center space-x-2">
                     <div className="w-4 h-4 bg-purple-500 rounded-full"></div>
-                    <span className="text-sm">Roxo: Abandonada (30+ dias)</span>
+                    <div>
+                      <div className="font-medium">{mapData.filter(r => r.color_status === 'purple').length}</div>
+                      <div className="text-xs text-gray-600">Abandonadas</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-4 h-4 bg-blue-500 rounded-lg"></div>
+                    <div>
+                      <div className="font-medium">{landfills.length}</div>
+                      <div className="text-xs text-gray-600">Aterros</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Route className="w-4 h-4 text-gray-600" />
+                    <div>
+                      <div className="font-medium">{routes.length}</div>
+                      <div className="text-xs text-gray-600">Rotas</div>
+                    </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Map Container */}
+            {/* Interactive Map */}
             <Card className="h-96">
               <CardContent className="p-0 h-full">
-                {activeTab === 'dumpsters' ? (
-                  <div className="h-full w-full bg-gradient-to-br from-blue-100 to-green-100 rounded-lg flex items-center justify-center">
-                    <div className="text-center space-y-4">
-                      <div className="text-6xl">🗺️</div>
-                      <h3 className="text-2xl font-bold text-gray-700">Mapa de Caçambas - Itapira, SP</h3>
-                      <p className="text-gray-600">Visualização interativa das caçambas por localização</p>
-                      <div className="grid grid-cols-2 gap-4 mt-6">
-                        <div className="bg-white p-3 rounded-lg shadow-sm">
-                          <div className="text-2xl font-bold text-green-600">{mapData.filter(r => r.color_status === 'green').length}</div>
-                          <div className="text-sm text-gray-600">No Prazo</div>
-                        </div>
-                        <div className="bg-white p-3 rounded-lg shadow-sm">
-                          <div className="text-2xl font-bold text-yellow-600">{mapData.filter(r => r.color_status === 'yellow').length}</div>
-                          <div className="text-sm text-gray-600">Vencidas</div>
-                        </div>
-                        <div className="bg-white p-3 rounded-lg shadow-sm">
-                          <div className="text-2xl font-bold text-red-600">{mapData.filter(r => r.color_status === 'red').length}</div>
-                          <div className="text-sm text-gray-600">Retiradas</div>
-                        </div>
-                        <div className="bg-white p-3 rounded-lg shadow-sm">
-                          <div className="text-2xl font-bold text-purple-600">{mapData.filter(r => r.color_status === 'purple').length}</div>
-                          <div className="text-sm text-gray-600">Abandonadas</div>
-                        </div>
-                      </div>
-                      <Button 
-                        onClick={() => {
-                          alert('Funcionalidade de mapa interativo será implementada na próxima versão!\n\nAtualmente mostrando estatísticas das caçambas por localização.');
-                        }}
-                        className="mt-4"
-                      >
-                        🗺️ Ver Mapa Interativo (Em Desenvolvimento)
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="h-full flex items-center justify-center text-gray-500">
-                    Selecione a aba Caçambas para ver o mapa
-                  </div>
+                {activeTab === 'dumpsters' && (
+                  <RealMap
+                    mapData={mapData}
+                    landfills={landfills}
+                    addingMarker={addingMarker}
+                    newMarkerPos={newMarkerPos}
+                    onMapClick={handleMapClick}
+                    onMarkerConfirm={handleMarkerConfirm}
+                    selectedRoute={null}
+                    routeWaypoints={routeWaypoints}
+                    showRoute={showRoute}
+                  />
                 )}
               </CardContent>
             </Card>
@@ -1386,8 +1470,11 @@ function App() {
               <Card className="bg-blue-50">
                 <CardContent className="p-4">
                   <p className="text-blue-800">
-                    <strong>Modo de Adição Manual Ativo:</strong> Clique no mapa para adicionar um novo ponto. 
-                    Você poderá associar este ponto a uma caçamba específica.
+                    <strong>Modo de Marcação Ativo:</strong> Clique no mapa para adicionar um novo ponto. 
+                    {selectedRentalForLocation ? 
+                      ` Definindo localização para caçamba ${selectedRentalForLocation.dumpster_code}.` :
+                      ' Você poderá associar este ponto posteriormente.'
+                    }
                   </p>
                 </CardContent>
               </Card>
@@ -1396,36 +1483,112 @@ function App() {
             {/* Rental Notes without Coordinates */}
             <Card>
               <CardHeader>
-                <CardTitle>Caçambas sem Localização</CardTitle>
+                <CardTitle>Caçambas sem Localização no Mapa</CardTitle>
                 <CardDescription>
-                  Caçambas que ainda não possuem coordenadas no mapa - clique para adicionar localização
+                  Caçambas que ainda não possuem coordenadas - clique em "Adicionar Localização" para marcar no mapa
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {rentalNotes.filter(note => !mapData.some(mapItem => mapItem.id === note.id)).map((rental) => (
+                  {rentalNotes.filter(note => !mapData.some(mapItem => mapItem.id === note.id)).slice(0, 10).map((rental) => (
                     <div key={rental.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div>
                         <p className="font-medium">Caçamba {rental.dumpster_code}</p>
-                        <p className="text-sm text-gray-600">{rental.client_name} - {rental.client_address}</p>
-                        <p className="text-xs text-gray-500">{rental.dumpster_size}</p>
+                        <p className="text-sm text-gray-600">{rental.client_name}</p>
+                        <p className="text-xs text-gray-500">{rental.client_address}</p>
+                        <Badge className={`mt-1 ${getStatusColor(rental.color_status)}`}>
+                          {getStatusText(rental.color_status, rental.status)}
+                        </Badge>
                       </div>
                       <Button 
                         size="sm"
-                        onClick={() => {
-                          // Implement coordinate assignment
-                          alert(`Implementar adição de coordenadas para caçamba ${rental.dumpster_code}`);
-                        }}
+                        onClick={() => addLocationToRental(rental)}
                       >
                         <MapPin className="h-4 w-4 mr-1" />
-                        Adicionar ao Mapa
+                        Adicionar Localização
                       </Button>
                     </div>
                   ))}
+                  {rentalNotes.filter(note => !mapData.some(mapItem => mapItem.id === note.id)).length === 0 && (
+                    <p className="text-gray-500 text-center py-4">Todas as caçambas estão localizadas no mapa! 🎉</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Landfills List */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Aterros Cadastrados</CardTitle>
+                <CardDescription>Lista de aterros disponíveis para descarte</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {landfills.map((landfill) => (
+                    <Card key={landfill.id} className="border-2 border-blue-200">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-lg flex items-center">
+                          <Factory className="h-5 w-5 text-blue-600 mr-2" />
+                          {landfill.name}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-1 text-sm">
+                          <p className="flex items-start">
+                            <MapPin className="h-4 w-4 mt-0.5 mr-1 text-gray-400" />
+                            {landfill.address}
+                          </p>
+                          {landfill.capacity && (
+                            <p className="text-gray-600">Capacidade: {landfill.capacity}m³</p>
+                          )}
+                          {landfill.description && (
+                            <p className="text-xs text-gray-500 italic">{landfill.description}</p>
+                          )}
+                          <div className="text-xs text-gray-400 mt-2">
+                            Lat: {landfill.latitude.toFixed(6)}, Lng: {landfill.longitude.toFixed(6)}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                  {landfills.length === 0 && (
+                    <div className="col-span-full text-center py-8 text-gray-500">
+                      Nenhum aterro cadastrado. Clique em "Adicionar Aterro" para começar.
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Dialog for adding location to rental */}
+          <Dialog open={addLocationDialog} onOpenChange={setAddLocationDialog}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Adicionar Localização</DialogTitle>
+                <DialogDescription>
+                  {selectedRentalForLocation && 
+                    `Definindo localização para a caçamba ${selectedRentalForLocation.dumpster_code} do cliente ${selectedRentalForLocation.client_name}`
+                  }
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Clique no botão abaixo para ativar o modo de marcação no mapa, depois clique na localização desejada.
+                </p>
+                <Button 
+                  onClick={() => {
+                    setAddingMarker(true);
+                    setAddLocationDialog(false);
+                  }}
+                  className="w-full"
+                >
+                  <MapPin className="h-4 w-4 mr-2" />
+                  Ativar Modo de Marcação no Mapa
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {/* Financial Tab */}
           <TabsContent value="financial" className="space-y-6">
