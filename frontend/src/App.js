@@ -1282,82 +1282,85 @@ function App() {
             {/* Map Container */}
             <Card className="h-96">
               <CardContent className="p-0 h-full">
-                <MapContainer
-                  center={[-22.4386, -46.8289]} // Coordinates for Itapira, SP
-                  zoom={13}
-                  style={{ height: '100%', width: '100%' }}
-                  className="rounded-lg"
-                >
-                  <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                  />
-                  
-                  <MapClickHandler />
-                  
-                  {/* Render rental markers */}
-                  {mapData.map((rental) => (
-                    <Marker
-                      key={rental.id}
-                      position={[rental.latitude, rental.longitude]}
-                      icon={createCustomIcon(getMarkerColor(rental.color_status))}
-                    >
-                      <Popup>
-                        <div className="p-2 min-w-64">
-                          <h3 className="font-bold text-lg mb-2">Caçamba {rental.dumpster_code}</h3>
-                          <div className="space-y-1 text-sm">
-                            <p><strong>Cliente:</strong> {rental.client_name}</p>
-                            <p><strong>Endereço:</strong> {rental.client_address}</p>
-                            <p><strong>Tamanho:</strong> {rental.dumpster_size}</p>
-                            <p><strong>Data de Locação:</strong> {new Date(rental.rental_date).toLocaleDateString('pt-BR')}</p>
-                            <p><strong>Valor:</strong> R$ {rental.price.toFixed(2)}</p>
-                            <div className="flex items-center space-x-2 mt-2">
-                              <Badge className={`${
-                                rental.color_status === 'green' ? 'bg-green-100 text-green-800' :
-                                rental.color_status === 'yellow' ? 'bg-yellow-100 text-yellow-800' :
-                                rental.color_status === 'red' ? 'bg-red-100 text-red-800' :
-                                'bg-purple-100 text-purple-800'
-                              }`}>
-                                {getStatusTextForMap(rental.color_status, rental.status)}
-                              </Badge>
+                {activeTab === 'dumpsters' && (
+                  <MapContainer
+                    key="itapira-map" // Add unique key
+                    center={[-22.4386, -46.8289]} // Coordinates for Itapira, SP
+                    zoom={13}
+                    style={{ height: '100%', width: '100%' }}
+                    className="rounded-lg"
+                  >
+                    <TileLayer
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    />
+                    
+                    <MapClickHandler />
+                    
+                    {/* Render rental markers */}
+                    {mapData.map((rental) => (
+                      <Marker
+                        key={rental.id}
+                        position={[rental.latitude, rental.longitude]}
+                        icon={createCustomIcon(getMarkerColor(rental.color_status))}
+                      >
+                        <Popup>
+                          <div className="p-2 min-w-64">
+                            <h3 className="font-bold text-lg mb-2">Caçamba {rental.dumpster_code}</h3>
+                            <div className="space-y-1 text-sm">
+                              <p><strong>Cliente:</strong> {rental.client_name}</p>
+                              <p><strong>Endereço:</strong> {rental.client_address}</p>
+                              <p><strong>Tamanho:</strong> {rental.dumpster_size}</p>
+                              <p><strong>Data de Locação:</strong> {new Date(rental.rental_date).toLocaleDateString('pt-BR')}</p>
+                              <p><strong>Valor:</strong> R$ {rental.price.toFixed(2)}</p>
+                              <div className="flex items-center space-x-2 mt-2">
+                                <Badge className={`${
+                                  rental.color_status === 'green' ? 'bg-green-100 text-green-800' :
+                                  rental.color_status === 'yellow' ? 'bg-yellow-100 text-yellow-800' :
+                                  rental.color_status === 'red' ? 'bg-red-100 text-red-800' :
+                                  'bg-purple-100 text-purple-800'
+                                }`}>
+                                  {getStatusTextForMap(rental.color_status, rental.status)}
+                                </Badge>
+                              </div>
+                              {rental.is_paid && (
+                                <Badge variant="outline" className="bg-green-50 text-green-700">
+                                  Pago
+                                </Badge>
+                              )}
+                              {rental.description && (
+                                <p className="italic text-gray-600 mt-2">{rental.description}</p>
+                              )}
                             </div>
-                            {rental.is_paid && (
-                              <Badge variant="outline" className="bg-green-50 text-green-700">
-                                Pago
-                              </Badge>
-                            )}
-                            {rental.description && (
-                              <p className="italic text-gray-600 mt-2">{rental.description}</p>
-                            )}
                           </div>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  ))}
-                  
-                  {/* New marker position when adding manually */}
-                  {newMarkerPos && (
-                    <Marker position={[newMarkerPos.lat, newMarkerPos.lng]}>
-                      <Popup>
-                        <div className="p-2">
-                          <p>Nova posição selecionada</p>
-                          <p>Lat: {newMarkerPos.lat.toFixed(6)}</p>
-                          <p>Lng: {newMarkerPos.lng.toFixed(6)}</p>
-                          <Button 
-                            size="sm" 
-                            className="mt-2"
-                            onClick={() => {
-                              // Here you would implement the logic to associate this position with a rental
-                              alert(`Coordenadas: ${newMarkerPos.lat}, ${newMarkerPos.lng}\n\nImplementar associação com caçamba específica`);
-                            }}
-                          >
-                            Confirmar Posição
-                          </Button>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  )}
-                </MapContainer>
+                        </Popup>
+                      </Marker>
+                    ))}
+                    
+                    {/* New marker position when adding manually */}
+                    {newMarkerPos && (
+                      <Marker position={[newMarkerPos.lat, newMarkerPos.lng]}>
+                        <Popup>
+                          <div className="p-2">
+                            <p>Nova posição selecionada</p>
+                            <p>Lat: {newMarkerPos.lat.toFixed(6)}</p>
+                            <p>Lng: {newMarkerPos.lng.toFixed(6)}</p>
+                            <Button 
+                              size="sm" 
+                              className="mt-2"
+                              onClick={() => {
+                                // Here you would implement the logic to associate this position with a rental
+                                alert(`Coordenadas: ${newMarkerPos.lat}, ${newMarkerPos.lng}\n\nImplementar associação com caçamba específica`);
+                              }}
+                            >
+                              Confirmar Posição
+                            </Button>
+                          </div>
+                        </Popup>
+                      </Marker>
+                    )}
+                  </MapContainer>
+                )}
               </CardContent>
             </Card>
 
