@@ -704,7 +704,14 @@ function App() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <Tabs value={activeTab} onValueChange={(value) => {
+          setActiveTab(value);
+          // Reset map states when changing tabs
+          if (value !== 'dumpsters') {
+            setAddingMarker(false);
+            setNewMarkerPos(null);
+          }
+        }} className="space-y-6">
           <TabsList className="grid w-full grid-cols-6 lg:w-fit lg:flex lg:space-x-2">
             <TabsTrigger value="dashboard" className="flex items-center space-x-2">
               <Package className="h-4 w-4" />
