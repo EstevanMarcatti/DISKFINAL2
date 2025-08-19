@@ -132,6 +132,54 @@ class Receivable(BaseModel):
     received_date: datetime
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+class Landfill(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    address: str
+    latitude: float
+    longitude: float
+    capacity: Optional[float] = None  # in m³
+    is_active: bool = True
+    description: Optional[str] = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class LandfillCreate(BaseModel):
+    name: str
+    address: str
+    latitude: float
+    longitude: float
+    capacity: Optional[float] = None
+    description: Optional[str] = ""
+
+class RouteWaypoint(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    route_id: str
+    rental_note_id: str
+    sequence: int  # Order in route
+    latitude: float
+    longitude: float
+    estimated_duration: Optional[int] = None  # minutes
+    status: str = "pending"  # pending, completed, skipped
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class DeliveryRoute(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    start_latitude: float
+    start_longitude: float
+    landfill_id: str
+    total_distance: Optional[float] = None  # in km
+    estimated_duration: Optional[int] = None  # in minutes
+    status: str = "planning"  # planning, active, completed
+    created_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class RouteCreate(BaseModel):
+    name: str
+    start_latitude: float
+    start_longitude: float
+    landfill_id: str
+    rental_note_ids: List[str]
+
 class ReceivableCreate(BaseModel):
     client_id: Optional[str] = None
     client_name: str
