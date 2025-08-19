@@ -236,6 +236,7 @@ function App() {
     fetchReceivables();
     fetchDashboardStats();
     fetchMonthlyFinancial();
+    fetchMapData();
   }, []);
 
   // Create functions
