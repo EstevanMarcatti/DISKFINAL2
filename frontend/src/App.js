@@ -652,7 +652,7 @@ function App() {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 lg:w-fit lg:flex lg:space-x-2">
+          <TabsList className="grid w-full grid-cols-6 lg:w-fit lg:flex lg:space-x-2">
             <TabsTrigger value="dashboard" className="flex items-center space-x-2">
               <Package className="h-4 w-4" />
               <span>Dashboard</span>
@@ -664,6 +664,10 @@ function App() {
             <TabsTrigger value="rentals" className="flex items-center space-x-2">
               <FileText className="h-4 w-4" />
               <span>Notas</span>
+            </TabsTrigger>
+            <TabsTrigger value="dumpsters" className="flex items-center space-x-2">
+              <Map className="h-4 w-4" />
+              <span>Caçambas</span>
             </TabsTrigger>
             <TabsTrigger value="financial" className="flex items-center space-x-2">
               <DollarSign className="h-4 w-4" />
