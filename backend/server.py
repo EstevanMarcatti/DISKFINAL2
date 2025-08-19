@@ -783,6 +783,108 @@ async def get_receivables():
     receivables = await db.receivables.find().to_list(length=None)
     return [Receivable(**parse_from_mongo(receivable)) for receivable in receivables]
 
+# Landfill endpoints
+@api_router.post("/landfills", response_model=Landfill)
+async def create_landfill(landfill_data: LandfillCreate):
+    landfill = Landfill(**landfill_data.dict())
+    await db.landfills.insert_one(prepare_for_mongo(landfill.dict()))
+    return landfill
+
+@api_router.get("/landfills", response_model=List[Landfill])
+async def get_landfills():
+    landfills = await db.landfills.find({"is_active": True}).to_list(length=None)
+    return [Landfill(**parse_from_mongo(landfill)) for landfill in landfills]
+
+@api_router.get("/landfills/{landfill_id}", response_model=Landfill)
+async def get_landfill(landfill_id: str):
+    landfill = await db.landfills.find_one({"id": landfill_id})
+    if not landfill:
+        raise HTTPException(status_code=404, detail="Aterro não encontrado")
+    return Landfill(**parse_from_mongo(landfill))
+
+@api_router.delete("/landfills/{landfill_id}")
+async def delete_landfill(landfill_id: str):
+    result = await db.landfills.update_one(
+        {"id": landfill_id},
+        {"$set": {"is_active": False}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Aterro não encontrado")
+    return {"message": "Aterro desativado com sucesso"}
+
+# Route endpoints
+@api_router.post("/routes", response_model=DeliveryRoute)
+async def create_delivery_route(route_data: RouteCreate):
+    # Create the route
+    route = DeliveryRoute(
+        name=route_data.name,
+        start_latitude=route_data.start_latitude,
+        start_longitude=route_data.start_longitude,
+        landfill_id=route_data.landfill_id
+    )
+    
+    route_dict = prepare_for_mongo(route.dict())
+    await db.routes.insert_one(route_dict)
+    
+    # Create waypoints for each rental note
+    for idx, rental_note_id in enumerate(route_data.rental_note_ids):
+        # Get rental note coordinates
+        rental = await db.rental_notes.find_one({"id": rental_note_id})
+        if rental and rental.get('latitude') and rental.get('longitude'):
+            waypoint = RouteWaypoint(
+                route_id=route.id,
+                rental_note_id=rental_note_id,
+                sequence=idx + 1,
+                latitude=rental['latitude'],
+                longitude=rental['longitude']
+            )
+            waypoint_dict = prepare_for_mongo(waypoint.dict())
+            await db.waypoints.insert_one(waypoint_dict)
+    
+    return route
+
+@api_router.get("/routes", response_model=List[DeliveryRoute])
+async def get_routes():
+    routes = await db.routes.find().to_list(length=None)
+    return [DeliveryRoute(**parse_from_mongo(route)) for route in routes]
+
+@api_router.get("/routes/{route_id}/waypoints")
+async def get_route_waypoints(route_id: str):
+    waypoints = await db.waypoints.find({"route_id": route_id}).sort("sequence").to_list(length=None)
+    result = []
+    for waypoint in waypoints:
+        waypoint_parsed = parse_from_mongo(waypoint)
+        # Get rental info
+        rental = await db.rental_notes.find_one({"id": waypoint['rental_note_id']})
+        if rental:
+            waypoint_parsed["rental_info"] = {
+                "client_name": rental.get("client_name"),
+                "dumpster_code": rental.get("dumpster_code"),
+                "address": rental.get("client_address")
+            }
+        result.append(waypoint_parsed)
+    return result
+
+# Geocoding helper endpoint
+@api_router.get("/geocode/{address}")
+async def geocode_address(address: str):
+    """Simple geocoding for Itapira addresses - placeholder for real geocoding service"""
+    # For now, return approximate coordinates for Itapira center with small random offset
+    import random
+    base_lat = -22.4386
+    base_lng = -46.8289
+    
+    # Add small random offset to simulate different addresses
+    offset_lat = random.uniform(-0.05, 0.05)
+    offset_lng = random.uniform(-0.05, 0.05)
+    
+    return {
+        "latitude": base_lat + offset_lat,
+        "longitude": base_lng + offset_lng,
+        "display_name": f"{address}, Itapira, SP",
+        "confidence": 0.8
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
