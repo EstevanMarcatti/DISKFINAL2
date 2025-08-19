@@ -1516,9 +1516,37 @@ function App() {
       <Dialog open={financialDialog} onOpenChange={setFinancialDialog}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Resumo Financeiro - {monthlyFinancial?.month}</DialogTitle>
-            <DialogDescription>Relatório completo de recebimentos e pagamentos do mês</DialogDescription>
+            <DialogTitle>Resumo Financeiro</DialogTitle>
+            <DialogDescription>Relatório detalhado de recebimentos e pagamentos</DialogDescription>
           </DialogHeader>
+          
+          {/* Date Range Selection */}
+          <div className="grid grid-cols-3 gap-4 mb-4">
+            <div>
+              <Label htmlFor="financial-start-date">Data Inicial</Label>
+              <Input
+                id="financial-start-date"
+                type="date"
+                value={financialDateRange.start_date}
+                onChange={(e) => setFinancialDateRange({...financialDateRange, start_date: e.target.value})}
+              />
+            </div>
+            <div>
+              <Label htmlFor="financial-end-date">Data Final</Label>
+              <Input
+                id="financial-end-date"
+                type="date"
+                value={financialDateRange.end_date}
+                onChange={(e) => setFinancialDateRange({...financialDateRange, end_date: e.target.value})}
+              />
+            </div>
+            <div className="flex items-end">
+              <Button onClick={updateFinancialSummary} className="w-full">
+                Atualizar Resumo
+              </Button>
+            </div>
+          </div>
+          
           {monthlyFinancial && (
             <div className="space-y-6">
               <div className="grid grid-cols-3 gap-4 text-center">
@@ -1542,30 +1570,42 @@ function App() {
                 </Card>
               </div>
               
+              <div className="text-center text-sm text-gray-600">
+                Período: {monthlyFinancial.month}
+              </div>
+              
               <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <h3 className="text-lg font-semibold text-green-600 mb-3">Recebimentos do Mês</h3>
+                  <h3 className="text-lg font-semibold text-green-600 mb-3">Recebimentos</h3>
                   <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {monthlyFinancial.receivables.map((receivable) => (
-                      <div key={receivable.id} className="p-2 bg-green-50 rounded text-sm">
-                        <p className="font-medium">{receivable.client_name}</p>
-                        <p className="text-gray-600">Caçamba: {receivable.dumpster_code}</p>
-                        <p className="text-green-600 font-bold">R$ {receivable.amount.toFixed(2)}</p>
-                      </div>
-                    ))}
+                    {monthlyFinancial.receivables && monthlyFinancial.receivables.length > 0 ? (
+                      monthlyFinancial.receivables.map((receivable, index) => (
+                        <div key={index} className="p-2 bg-green-50 rounded text-sm">
+                          <p className="font-medium">{receivable.client_name}</p>
+                          <p className="text-gray-600">Caçamba: {receivable.dumpster_code || receivable.account_name}</p>
+                          <p className="text-green-600 font-bold">R$ {receivable.amount.toFixed(2)}</p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-gray-500 text-center py-4">Nenhum recebimento no período</p>
+                    )}
                   </div>
                 </div>
                 
                 <div>
-                  <h3 className="text-lg font-semibold text-red-600 mb-3">Pagamentos do Mês</h3>
+                  <h3 className="text-lg font-semibold text-red-600 mb-3">Pagamentos</h3>
                   <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {monthlyFinancial.payments.map((payment) => (
-                      <div key={payment.id} className="p-2 bg-red-50 rounded text-sm">
-                        <p className="font-medium">{payment.account_name}</p>
-                        <p className="text-gray-600">{payment.description}</p>
-                        <p className="text-red-600 font-bold">R$ {payment.amount.toFixed(2)}</p>
-                      </div>
-                    ))}
+                    {monthlyFinancial.payments && monthlyFinancial.payments.length > 0 ? (
+                      monthlyFinancial.payments.map((payment, index) => (
+                        <div key={index} className="p-2 bg-red-50 rounded text-sm">
+                          <p className="font-medium">{payment.account_name}</p>
+                          <p className="text-gray-600">{payment.description}</p>
+                          <p className="text-red-600 font-bold">R$ {payment.amount.toFixed(2)}</p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-gray-500 text-center py-4">Nenhum pagamento no período</p>
+                    )}
                   </div>
                 </div>
               </div>
