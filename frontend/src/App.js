@@ -44,9 +44,19 @@ function App() {
   
   // Map states
   const [mapData, setMapData] = useState([]);
+  const [landfills, setLandfills] = useState([]);
   const [selectedMarker, setSelectedMarker] = useState(null);
   const [addingMarker, setAddingMarker] = useState(false);
   const [newMarkerPos, setNewMarkerPos] = useState(null);
+  const [showRoute, setShowRoute] = useState(false);
+  const [routeWaypoints, setRouteWaypoints] = useState([]);
+  const [routes, setRoutes] = useState([]);
+
+  // Dialog states for new features
+  const [landfillDialog, setLandfillDialog] = useState(false);
+  const [routeDialog, setRouteDialog] = useState(false);
+  const [addLocationDialog, setAddLocationDialog] = useState(false);
+  const [selectedRentalForLocation, setSelectedRentalForLocation] = useState(null);
 
   // Dialog states
   const [clientDialog, setClientDialog] = useState(false);
