@@ -408,91 +408,106 @@ function App() {
 
       const reportData = response.data;
       
-      // Create PDF
-      const doc = new jsPDF();
-      const pageWidth = doc.internal.pageSize.width;
-      
-      // Header
-      doc.setFontSize(20);
-      doc.setTextColor(40, 40, 40);
-      doc.text('Disk Entulho Marchioretto', pageWidth / 2, 20, { align: 'center' });
-      
-      doc.setFontSize(16);
-      doc.text('Extrato Detalhado', pageWidth / 2, 30, { align: 'center' });
-      
-      doc.setFontSize(12);
-      doc.text(`Período: ${reportData.period.start_date} a ${reportData.period.end_date}`, pageWidth / 2, 40, { align: 'center' });
-      
-      let yPosition = 55;
-      
-      // Totals Summary
-      doc.setFontSize(14);
-      doc.setTextColor(0, 100, 0);
-      doc.text('RESUMO GERAL', 14, yPosition);
-      yPosition += 10;
-      
-      doc.setFontSize(10);
-      doc.setTextColor(40, 40, 40);
-      doc.text(`Total de Caçambas Locadas: ${reportData.totals.total_rentals}`, 14, yPosition);
-      doc.text(`Valor Total das Locações: R$ ${reportData.totals.total_rental_amount.toFixed(2)}`, 14, yPosition + 8);
-      doc.text(`Total Recebido: R$ ${reportData.totals.total_receivable_amount.toFixed(2)}`, 14, yPosition + 16);
-      doc.text(`Total Pago: R$ ${reportData.totals.total_payment_amount.toFixed(2)}`, 14, yPosition + 24);
-      doc.text(`Receita Líquida: R$ ${reportData.totals.net_income.toFixed(2)}`, 14, yPosition + 32);
-      yPosition += 45;
-      
-      // Daily Details Table
-      doc.setFontSize(14);
-      doc.setTextColor(0, 0, 150);
-      doc.text('DETALHES POR DIA', 14, yPosition);
-      yPosition += 10;
-      
-      const tableData = reportData.daily_data.map(day => [
-        day.formatted_date,
-        day.rentals.toString(),
-        `R$ ${day.rental_amount.toFixed(2)}`,
-        day.receivables.toString(),
-        `R$ ${day.receivable_amount.toFixed(2)}`,
-        day.payments.toString(),
-        `R$ ${day.payment_amount.toFixed(2)}`
-      ]);
-      
-      doc.autoTable({
-        head: [['Data', 'Locações', 'Valor Locações', 'Recebimentos', 'Valor Recebido', 'Pagamentos', 'Valor Pago']],
-        body: tableData,
-        startY: yPosition,
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [100, 150, 200] }
-      });
-      
-      // Chart simulation (text-based representation)
-      const finalY = doc.lastAutoTable.finalY + 20;
-      doc.setFontSize(14);
-      doc.setTextColor(150, 0, 150);
-      doc.text('GRÁFICO RESUMO', 14, finalY);
-      
-      doc.setFontSize(10);
-      doc.setTextColor(40, 40, 40);
-      doc.text('Evolução Diária:', 14, finalY + 15);
-      
-      // Simple text-based chart representation
-      reportData.chart_data.dates.forEach((date, index) => {
-        const rentals = reportData.chart_data.rentals[index];
-        const receivables = reportData.chart_data.receivables[index];
-        const payments = reportData.chart_data.payments[index];
+      // Create PDF with better error handling
+      try {
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.width;
         
-        doc.text(`${date}: Locações: ${rentals} | Recebido: R$ ${receivables.toFixed(2)} | Pago: R$ ${payments.toFixed(2)}`, 
-                14, finalY + 25 + (index * 8));
-      });
-      
-      // Save PDF
-      doc.save(`Extrato_Detalhado_${reportData.period.start_date.replace(/\//g, '-')}_a_${reportData.period.end_date.replace(/\//g, '-')}.pdf`);
-      
-      setReportDialog(false);
-      alert('Relatório PDF gerado com sucesso!');
+        // Header
+        doc.setFontSize(20);
+        doc.setTextColor(40, 40, 40);
+        doc.text('Disk Entulho Marchioretto', pageWidth / 2, 20, { align: 'center' });
+        
+        doc.setFontSize(16);
+        doc.text('Extrato Detalhado', pageWidth / 2, 30, { align: 'center' });
+        
+        doc.setFontSize(12);
+        doc.text(`Período: ${reportData.period.start_date} a ${reportData.period.end_date}`, pageWidth / 2, 40, { align: 'center' });
+        
+        let yPosition = 55;
+        
+        // Totals Summary
+        doc.setFontSize(14);
+        doc.setTextColor(0, 100, 0);
+        doc.text('RESUMO GERAL', 14, yPosition);
+        yPosition += 10;
+        
+        doc.setFontSize(10);
+        doc.setTextColor(40, 40, 40);
+        doc.text(`Total de Caçambas Locadas: ${reportData.totals.total_rentals || 0}`, 14, yPosition);
+        doc.text(`Valor Total das Locações: R$ ${(reportData.totals.total_rental_amount || 0).toFixed(2)}`, 14, yPosition + 8);
+        doc.text(`Total Recebido: R$ ${(reportData.totals.total_receivable_amount || 0).toFixed(2)}`, 14, yPosition + 16);
+        doc.text(`Total Pago: R$ ${(reportData.totals.total_payment_amount || 0).toFixed(2)}`, 14, yPosition + 24);
+        doc.text(`Receita Líquida: R$ ${(reportData.totals.net_income || 0).toFixed(2)}`, 14, yPosition + 32);
+        yPosition += 45;
+        
+        // Daily Details Table
+        if (reportData.daily_data && reportData.daily_data.length > 0) {
+          doc.setFontSize(14);
+          doc.setTextColor(0, 0, 150);
+          doc.text('DETALHES POR DIA', 14, yPosition);
+          yPosition += 10;
+          
+          const tableData = reportData.daily_data.map(day => [
+            day.formatted_date || 'N/A',
+            (day.rentals || 0).toString(),
+            `R$ ${(day.rental_amount || 0).toFixed(2)}`,
+            (day.receivables || 0).toString(),
+            `R$ ${(day.receivable_amount || 0).toFixed(2)}`,
+            (day.payments || 0).toString(),
+            `R$ ${(day.payment_amount || 0).toFixed(2)}`
+          ]);
+          
+          doc.autoTable({
+            head: [['Data', 'Locações', 'Valor Locações', 'Recebimentos', 'Valor Recebido', 'Pagamentos', 'Valor Pago']],
+            body: tableData,
+            startY: yPosition,
+            styles: { fontSize: 8 },
+            headStyles: { fillColor: [100, 150, 200] }
+          });
+          
+          // Chart simulation (text-based representation)
+          const finalY = doc.lastAutoTable?.finalY ? doc.lastAutoTable.finalY + 20 : yPosition + 100;
+          doc.setFontSize(14);
+          doc.setTextColor(150, 0, 150);
+          doc.text('RESUMO VISUAL', 14, finalY);
+          
+          doc.setFontSize(10);
+          doc.setTextColor(40, 40, 40);
+          doc.text('Evolução do Período:', 14, finalY + 15);
+          
+          // Simple text-based chart representation
+          if (reportData.chart_data && reportData.chart_data.dates) {
+            reportData.chart_data.dates.forEach((date, index) => {
+              const rentals = reportData.chart_data.rentals[index] || 0;
+              const receivables = reportData.chart_data.receivables[index] || 0;
+              const payments = reportData.chart_data.payments[index] || 0;
+              
+              if (finalY + 25 + (index * 8) < 280) { // Check page bounds
+                doc.text(`${date}: Locações: ${rentals} | Recebido: R$ ${receivables.toFixed(2)} | Pago: R$ ${payments.toFixed(2)}`, 
+                        14, finalY + 25 + (index * 8));
+              }
+            });
+          }
+        } else {
+          doc.text('Nenhum dado encontrado para o período selecionado.', 14, yPosition);
+        }
+        
+        // Save PDF
+        const fileName = `Extrato_${reportData.period.start_date.replace(/\//g, '-')}_a_${reportData.period.end_date.replace(/\//g, '-')}.pdf`;
+        doc.save(fileName);
+        
+        setReportDialog(false);
+        alert('Relatório PDF gerado com sucesso!');
+        
+      } catch (pdfError) {
+        console.error('Erro ao gerar PDF:', pdfError);
+        alert('Erro ao gerar o arquivo PDF. Dados obtidos mas falha na criação do arquivo.');
+      }
       
     } catch (error) {
       console.error('Erro ao gerar relatório:', error);
-      alert('Erro ao gerar relatório');
+      alert('Erro ao obter dados do relatório: ' + (error.response?.data?.detail || error.message));
     } finally {
       setLoading(false);
     }
