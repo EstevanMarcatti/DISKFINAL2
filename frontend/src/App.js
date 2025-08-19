@@ -210,6 +210,24 @@ function App() {
     await fetchMonthlyFinancial(financialDateRange.start_date, financialDateRange.end_date);
   };
 
+  const fetchMapData = async () => {
+    try {
+      const response = await axios.get(`${API}/rental-notes/map-data`);
+      setMapData(response.data);
+    } catch (error) {
+      console.error('Erro ao buscar dados do mapa:', error);
+    }
+  };
+
+  const updateRentalCoordinates = async (noteId, latitude, longitude) => {
+    try {
+      await axios.put(`${API}/rental-notes/${noteId}/coordinates?latitude=${latitude}&longitude=${longitude}`);
+      fetchMapData(); // Refresh map data
+    } catch (error) {
+      console.error('Erro ao atualizar coordenadas:', error);
+    }
+  };
+
   useEffect(() => {
     fetchClients();
     fetchDumpsterTypes();
