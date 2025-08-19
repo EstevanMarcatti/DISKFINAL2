@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
+import './leaflet.css';
 import axios from 'axios';
-import { Truck, Users, FileText, DollarSign, Settings, Plus, Search, Calendar, MapPin, Package, Edit2, Trash2, Phone, Mail, Clock, Download, CreditCard } from 'lucide-react';
+import { Truck, Users, FileText, DollarSign, Settings, Plus, Search, Calendar, MapPin, Package, Edit2, Trash2, Phone, Mail, Clock, Download, CreditCard, Map } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
@@ -16,6 +17,16 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+
+// Fix for leaflet default marker icons
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMzYiIHZpZXdCb3g9IjAgMCAyNCAzNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDM2TDEyIDEyTDI0IDEyTDEyIDM2WiIgZmlsbD0iIzMzNzNkYyIvPgo8Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIxMiIgZmlsbD0iIzMzNzNkYyIvPgo8Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSI4IiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K',
+  iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMzYiIHZpZXdCb3g9IjAgMCAyNCAzNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDM2TDEyIDEyTDI0IDEyTDEyIDM2WiIgZmlsbD0iIzMzNzNkYyIvPgo8Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIxMiIgZmlsbD0iIzMzNzNkYyIvPgo8Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSI4IiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K',
+  shadowUrl: ''
+});
 
 // Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend);
