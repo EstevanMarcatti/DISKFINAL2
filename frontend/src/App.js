@@ -256,6 +256,8 @@ function App() {
     fetchDashboardStats();
     fetchMonthlyFinancial();
     fetchMapData();
+    fetchLandfills();
+    fetchRoutes();
   }, []);
 
   // Create functions
