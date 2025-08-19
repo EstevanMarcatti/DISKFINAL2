@@ -89,6 +89,9 @@ class RentalNote(BaseModel):
     status: RentalStatus = RentalStatus.ACTIVE
     is_paid: bool = False
     price: float
+    # Map coordinates
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class RentalNoteCreate(BaseModel):
@@ -101,6 +104,9 @@ class RentalNoteCreate(BaseModel):
     rental_date: datetime
     description: Optional[str] = ""
     price: float
+    # Map coordinates (optional)
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 class Payment(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
