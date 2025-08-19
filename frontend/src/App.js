@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 import axios from 'axios';
-import { Truck, Users, FileText, DollarSign, Settings, Plus, Search, Calendar, MapPin, Package, Edit2, Trash2, Phone, Mail, Clock } from 'lucide-react';
+import { Truck, Users, FileText, DollarSign, Settings, Plus, Search, Calendar, MapPin, Package, Edit2, Trash2, Phone, Mail, Clock, Download, CreditCard } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
@@ -12,6 +12,13 @@ import { Textarea } from './components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Switch } from './components/ui/switch';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend } from 'chart.js';
+import { Bar, Line } from 'react-chartjs-2';
+
+// Register Chart.js components
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend);
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -24,6 +31,7 @@ function App() {
   const [activeRentals, setActiveRentals] = useState([]);
   const [retrievedRentals, setRetrievedRentals] = useState([]);
   const [overdueRentals, setOverdueRentals] = useState([]);
+  const [expiredRentals, setExpiredRentals] = useState([]);
   const [payments, setPayments] = useState([]);
   const [receivables, setReceivables] = useState([]);
   const [monthlyFinancial, setMonthlyFinancial] = useState(null);
@@ -40,6 +48,7 @@ function App() {
   const [clientStatsDialog, setClientStatsDialog] = useState(false);
   const [financialDialog, setFinancialDialog] = useState(false);
   const [editClientDialog, setEditClientDialog] = useState(false);
+  const [reportDialog, setReportDialog] = useState(false);
   const [selectedClientStats, setSelectedClientStats] = useState(null);
   const [selectedDumpsterType, setSelectedDumpsterType] = useState(null);
 
@@ -49,6 +58,7 @@ function App() {
     address: '', 
     phone: '', 
     email: '', 
+    cpf_cnpj: '',
     additional_address: '', 
     notes: '' 
   });
@@ -71,6 +81,10 @@ function App() {
     description: ''
   });
   const [newPrice, setNewPrice] = useState(0);
+  const [reportDates, setReportDates] = useState({
+    start_date: '',
+    end_date: ''
+  });
 
   // Rental view states
   const [rentalViewMode, setRentalViewMode] = useState('all'); // 'all', 'active', 'retrieved'
@@ -108,6 +122,9 @@ function App() {
       
       const overdueResponse = await axios.get(`${API}/rental-notes/overdue`);
       setOverdueRentals(overdueResponse.data);
+      
+      const expiredResponse = await axios.get(`${API}/rental-notes/expired`);
+      setExpiredRentals(expiredResponse.data);
     } catch (error) {
       console.error('Erro ao buscar notas de locação:', error);
     }
@@ -174,6 +191,7 @@ function App() {
         address: '', 
         phone: '', 
         email: '', 
+        cpf_cnpj: '',
         additional_address: '', 
         notes: '' 
       });
@@ -220,6 +238,22 @@ function App() {
     } catch (error) {
       console.error('Erro ao excluir cliente:', error);
       alert('Erro ao excluir cliente');
+    }
+  };
+
+  const deleteRentalNote = async (noteId) => {
+    if (!confirm('Tem certeza que deseja excluir esta nota de locação?')) {
+      return;
+    }
+    
+    try {
+      await axios.delete(`${API}/rental-notes/${noteId}`);
+      fetchRentalNotes();
+      fetchDashboardStats();
+      alert('Nota excluída com sucesso!');
+    } catch (error) {
+      console.error('Erro ao excluir nota:', error);
+      alert('Erro ao excluir nota');
     }
   };
 
@@ -359,6 +393,111 @@ function App() {
     }
   };
 
+  const generateDetailedReport = async () => {
+    if (!reportDates.start_date || !reportDates.end_date) {
+      alert('Selecione as datas de início e fim do relatório');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await axios.post(`${API}/reports/detailed`, {
+        start_date: new Date(reportDates.start_date).toISOString(),
+        end_date: new Date(reportDates.end_date).toISOString()
+      });
+
+      const reportData = response.data;
+      
+      // Create PDF
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.width;
+      
+      // Header
+      doc.setFontSize(20);
+      doc.setTextColor(40, 40, 40);
+      doc.text('Disk Entulho Marchioretto', pageWidth / 2, 20, { align: 'center' });
+      
+      doc.setFontSize(16);
+      doc.text('Extrato Detalhado', pageWidth / 2, 30, { align: 'center' });
+      
+      doc.setFontSize(12);
+      doc.text(`Período: ${reportData.period.start_date} a ${reportData.period.end_date}`, pageWidth / 2, 40, { align: 'center' });
+      
+      let yPosition = 55;
+      
+      // Totals Summary
+      doc.setFontSize(14);
+      doc.setTextColor(0, 100, 0);
+      doc.text('RESUMO GERAL', 14, yPosition);
+      yPosition += 10;
+      
+      doc.setFontSize(10);
+      doc.setTextColor(40, 40, 40);
+      doc.text(`Total de Caçambas Locadas: ${reportData.totals.total_rentals}`, 14, yPosition);
+      doc.text(`Valor Total das Locações: R$ ${reportData.totals.total_rental_amount.toFixed(2)}`, 14, yPosition + 8);
+      doc.text(`Total Recebido: R$ ${reportData.totals.total_receivable_amount.toFixed(2)}`, 14, yPosition + 16);
+      doc.text(`Total Pago: R$ ${reportData.totals.total_payment_amount.toFixed(2)}`, 14, yPosition + 24);
+      doc.text(`Receita Líquida: R$ ${reportData.totals.net_income.toFixed(2)}`, 14, yPosition + 32);
+      yPosition += 45;
+      
+      // Daily Details Table
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 150);
+      doc.text('DETALHES POR DIA', 14, yPosition);
+      yPosition += 10;
+      
+      const tableData = reportData.daily_data.map(day => [
+        day.formatted_date,
+        day.rentals.toString(),
+        `R$ ${day.rental_amount.toFixed(2)}`,
+        day.receivables.toString(),
+        `R$ ${day.receivable_amount.toFixed(2)}`,
+        day.payments.toString(),
+        `R$ ${day.payment_amount.toFixed(2)}`
+      ]);
+      
+      doc.autoTable({
+        head: [['Data', 'Locações', 'Valor Locações', 'Recebimentos', 'Valor Recebido', 'Pagamentos', 'Valor Pago']],
+        body: tableData,
+        startY: yPosition,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [100, 150, 200] }
+      });
+      
+      // Chart simulation (text-based representation)
+      const finalY = doc.lastAutoTable.finalY + 20;
+      doc.setFontSize(14);
+      doc.setTextColor(150, 0, 150);
+      doc.text('GRÁFICO RESUMO', 14, finalY);
+      
+      doc.setFontSize(10);
+      doc.setTextColor(40, 40, 40);
+      doc.text('Evolução Diária:', 14, finalY + 15);
+      
+      // Simple text-based chart representation
+      reportData.chart_data.dates.forEach((date, index) => {
+        const rentals = reportData.chart_data.rentals[index];
+        const receivables = reportData.chart_data.receivables[index];
+        const payments = reportData.chart_data.payments[index];
+        
+        doc.text(`${date}: Locações: ${rentals} | Recebido: R$ ${receivables.toFixed(2)} | Pago: R$ ${payments.toFixed(2)}`, 
+                14, finalY + 25 + (index * 8));
+      });
+      
+      // Save PDF
+      doc.save(`Extrato_Detalhado_${reportData.period.start_date.replace(/\//g, '-')}_a_${reportData.period.end_date.replace(/\//g, '-')}.pdf`);
+      
+      setReportDialog(false);
+      alert('Relatório PDF gerado com sucesso!');
+      
+    } catch (error) {
+      console.error('Erro ao gerar relatório:', error);
+      alert('Erro ao gerar relatório');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getStatusColor = (colorStatus) => {
     switch (colorStatus) {
       case 'green': return 'bg-green-100 border-green-300 text-green-800';
@@ -398,7 +537,8 @@ function App() {
   const filteredClients = clients.filter(client =>
     client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     client.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (client.phone && client.phone.toLowerCase().includes(searchTerm.toLowerCase()))
+    (client.phone && client.phone.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (client.cpf_cnpj && client.cpf_cnpj.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const openPriceDialog = (dumpsterType) => {
@@ -459,7 +599,7 @@ function App() {
 
           {/* Dashboard Tab */}
           <TabsContent value="dashboard" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
               <Card 
                 className="bg-gradient-to-r from-blue-500 to-blue-600 text-white cursor-pointer hover:shadow-lg transition-shadow"
                 onClick={() => setActiveTab('clients')}
@@ -499,6 +639,21 @@ function App() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold">{dashboardStats.retrieved_dumpsters || 0}</div>
+                </CardContent>
+              </Card>
+              
+              <Card 
+                className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white cursor-pointer hover:shadow-lg transition-shadow"
+                onClick={() => {
+                  setActiveTab('rentals');
+                  // Filter expired rentals
+                }}
+              >
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium opacity-90">Caçambas Vencidas</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">{dashboardStats.expired_dumpsters || 0}</div>
                 </CardContent>
               </Card>
               
@@ -603,6 +758,27 @@ function App() {
                         placeholder="Endereço principal"
                       />
                     </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="client-cpf-cnpj">CPF/CNPJ</Label>
+                        <Input
+                          id="client-cpf-cnpj"
+                          value={newClient.cpf_cnpj}
+                          onChange={(e) => setNewClient({...newClient, cpf_cnpj: e.target.value})}
+                          placeholder="000.000.000-00"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="client-email">Email</Label>
+                        <Input
+                          id="client-email"
+                          type="email"
+                          value={newClient.email}
+                          onChange={(e) => setNewClient({...newClient, email: e.target.value})}
+                          placeholder="email@exemplo.com"
+                        />
+                      </div>
+                    </div>
                     <div>
                       <Label htmlFor="client-additional-address">Endereço Adicional</Label>
                       <Input
@@ -610,16 +786,6 @@ function App() {
                         value={newClient.additional_address}
                         onChange={(e) => setNewClient({...newClient, additional_address: e.target.value})}
                         placeholder="Endereço secundário (opcional)"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="client-email">Email</Label>
-                      <Input
-                        id="client-email"
-                        type="email"
-                        value={newClient.email}
-                        onChange={(e) => setNewClient({...newClient, email: e.target.value})}
-                        placeholder="email@exemplo.com"
                       />
                     </div>
                     <div>
@@ -689,6 +855,12 @@ function App() {
                         <div className="flex items-center space-x-2">
                           <Mail className="h-4 w-4 text-gray-400" />
                           <p className="text-sm text-gray-600">{client.email}</p>
+                        </div>
+                      )}
+                      {client.cpf_cnpj && (
+                        <div className="flex items-center space-x-2">
+                          <CreditCard className="h-4 w-4 text-gray-400" />
+                          <p className="text-sm text-gray-600">{client.cpf_cnpj}</p>
                         </div>
                       )}
                     </div>
@@ -863,9 +1035,19 @@ function App() {
                   <CardHeader>
                     <CardTitle className="flex items-center justify-between">
                       <span>Caçamba {rental.dumpster_code}</span>
-                      <Badge className={getStatusColor(rental.color_status)}>
-                        {getStatusText(rental.color_status, rental.status)}
-                      </Badge>
+                      <div className="flex items-center space-x-2">
+                        <Badge className={getStatusColor(rental.color_status)}>
+                          {getStatusText(rental.color_status, rental.status)}
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 hover:text-red-700"
+                          onClick={() => deleteRentalNote(rental.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -917,9 +1099,51 @@ function App() {
           {/* Financial Tab */}
           <TabsContent value="financial" className="space-y-6">
             <div className="flex justify-between items-center">
-              <Button onClick={() => setFinancialDialog(true)}>
-                Ver Resumo Mensal Completo
-              </Button>
+              <div className="flex space-x-2">
+                <Button onClick={() => setFinancialDialog(true)}>
+                  Ver Resumo Mensal Completo
+                </Button>
+                
+                <Dialog open={reportDialog} onOpenChange={setReportDialog}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-green-600 hover:bg-green-700">
+                      <Download className="h-4 w-4 mr-2" />
+                      Gerar Extrato PDF
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Gerar Extrato Detalhado</DialogTitle>
+                      <DialogDescription>Selecione o período para o extrato em PDF</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="start-date">Data Inicial</Label>
+                          <Input
+                            id="start-date"
+                            type="date"
+                            value={reportDates.start_date}
+                            onChange={(e) => setReportDates({...reportDates, start_date: e.target.value})}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="end-date">Data Final</Label>
+                          <Input
+                            id="end-date"
+                            type="date"
+                            value={reportDates.end_date}
+                            onChange={(e) => setReportDates({...reportDates, end_date: e.target.value})}
+                          />
+                        </div>
+                      </div>
+                      <Button onClick={generateDetailedReport} disabled={loading} className="w-full">
+                        {loading ? 'Gerando PDF...' : 'Gerar Extrato PDF'}
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
               
               <Dialog open={paymentDialog} onOpenChange={setPaymentDialog}>
                 <DialogTrigger asChild>
@@ -1136,6 +1360,27 @@ function App() {
                   placeholder="Endereço principal"
                 />
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="edit-client-cpf-cnpj">CPF/CNPJ</Label>
+                  <Input
+                    id="edit-client-cpf-cnpj"
+                    value={editingClient.cpf_cnpj || ''}
+                    onChange={(e) => setEditingClient({...editingClient, cpf_cnpj: e.target.value})}
+                    placeholder="000.000.000-00"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-client-email">Email</Label>
+                  <Input
+                    id="edit-client-email"
+                    type="email"
+                    value={editingClient.email || ''}
+                    onChange={(e) => setEditingClient({...editingClient, email: e.target.value})}
+                    placeholder="email@exemplo.com"
+                  />
+                </div>
+              </div>
               <div>
                 <Label htmlFor="edit-client-additional-address">Endereço Adicional</Label>
                 <Input
@@ -1143,16 +1388,6 @@ function App() {
                   value={editingClient.additional_address || ''}
                   onChange={(e) => setEditingClient({...editingClient, additional_address: e.target.value})}
                   placeholder="Endereço secundário (opcional)"
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-client-email">Email</Label>
-                <Input
-                  id="edit-client-email"
-                  type="email"
-                  value={editingClient.email || ''}
-                  onChange={(e) => setEditingClient({...editingClient, email: e.target.value})}
-                  placeholder="email@exemplo.com"
                 />
               </div>
               <div>

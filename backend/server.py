@@ -6,10 +6,11 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict
 import uuid
 from datetime import datetime, timezone, timedelta
 from enum import Enum
+from collections import defaultdict
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -42,6 +43,7 @@ class Client(BaseModel):
     address: str
     phone: Optional[str] = ""
     email: Optional[str] = ""
+    cpf_cnpj: Optional[str] = ""
     additional_address: Optional[str] = ""
     notes: Optional[str] = ""
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -51,6 +53,7 @@ class ClientCreate(BaseModel):
     address: str
     phone: Optional[str] = ""
     email: Optional[str] = ""
+    cpf_cnpj: Optional[str] = ""
     additional_address: Optional[str] = ""
     notes: Optional[str] = ""
 
@@ -59,6 +62,7 @@ class ClientUpdate(BaseModel):
     address: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    cpf_cnpj: Optional[str] = None
     additional_address: Optional[str] = None
     notes: Optional[str] = None
 
@@ -130,6 +134,10 @@ class ReceivableCreate(BaseModel):
     amount: float
     received_date: datetime
 
+class ReportRequest(BaseModel):
+    start_date: datetime
+    end_date: datetime
+
 # Helper functions
 def prepare_for_mongo(data):
     if isinstance(data, dict):
@@ -140,10 +148,6 @@ def prepare_for_mongo(data):
 
 def parse_from_mongo(item):
     if isinstance(item, dict):
-        # Remove MongoDB ObjectId fields that cause serialization issues
-        if '_id' in item:
-            del item['_id']
-        
         for key, value in item.items():
             if isinstance(value, str) and 'T' in value and ('Z' in value or '+' in value):
                 try:
@@ -289,6 +293,13 @@ async def get_rental_notes():
         result.append(rental_note)
     return result
 
+@api_router.delete("/rental-notes/{note_id}")
+async def delete_rental_note(note_id: str):
+    result = await db.rental_notes.delete_one({"id": note_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Nota não encontrada")
+    return {"message": "Nota excluída com sucesso"}
+
 @api_router.get("/rental-notes/active")
 async def get_active_rental_notes():
     notes = await db.rental_notes.find({"status": "active"}).to_list(length=None)
@@ -343,6 +354,30 @@ async def get_overdue_rental_notes():
         
         # Only include purple (30+ days) rentals
         if color_status == "purple":
+            note_with_status = rental_note.dict()
+            note_with_status["color_status"] = color_status
+            result.append(note_with_status)
+    
+    return result
+
+@api_router.get("/rental-notes/expired")
+async def get_expired_rental_notes():
+    """Get rentals that are expired (7-30 days) - yellow status"""
+    notes = await db.rental_notes.find({"status": "active"}).to_list(length=None)
+    result = []
+    
+    for note in notes:
+        parsed_note = parse_from_mongo(note)
+        rental_note = RentalNote(**parsed_note)
+        
+        # Calculate color status
+        color_status = calculate_rental_status_color(
+            rental_note.rental_date, 
+            rental_note.status
+        )
+        
+        # Only include yellow (7-30 days) rentals
+        if color_status == "yellow":
             note_with_status = rental_note.dict()
             note_with_status["color_status"] = color_status
             result.append(note_with_status)
@@ -423,6 +458,7 @@ async def get_dashboard_stats():
     
     # Calculate overdue rentals (30+ days)
     overdue_count = 0
+    expired_count = 0  # 7-30 days
     for rental in rentals:
         if rental.get('status') == 'active':
             rental_date = rental.get('rental_date')
@@ -435,13 +471,140 @@ async def get_dashboard_stats():
             color_status = calculate_rental_status_color(rental_date, rental.get('status'))
             if color_status == 'purple':
                 overdue_count += 1
+            elif color_status == 'yellow':
+                expired_count += 1
     
     return {
         "total_clients": total_clients,
         "active_dumpsters": active_rentals,
         "retrieved_dumpsters": retrieved_rentals,
         "overdue_dumpsters": overdue_count,
+        "expired_dumpsters": expired_count,
         "total_payments": total_payments
+    }
+
+# Financial reports
+@api_router.post("/reports/detailed")
+async def generate_detailed_report(report_request: ReportRequest):
+    """Generate detailed financial report for PDF export"""
+    start_date = report_request.start_date
+    end_date = report_request.end_date
+    
+    # Get rentals in date range
+    rentals = await db.rental_notes.find({}).to_list(length=None)
+    receivables = await db.receivables.find({}).to_list(length=None)
+    payments = await db.payments.find({}).to_list(length=None)
+    
+    # Filter by date range and organize by day
+    daily_data = defaultdict(lambda: {
+        'rentals': 0,
+        'rental_amount': 0,
+        'receivables': 0,
+        'receivable_amount': 0,
+        'payments': 0,
+        'payment_amount': 0,
+        'rental_details': [],
+        'receivable_details': [],
+        'payment_details': []
+    })
+    
+    # Process rentals
+    for rental in rentals:
+        rental_date = rental.get('rental_date')
+        if isinstance(rental_date, str):
+            try:
+                rental_date = datetime.fromisoformat(rental_date.replace('Z', '+00:00'))
+            except:
+                continue
+        
+        if start_date <= rental_date <= end_date:
+            day_key = rental_date.strftime('%Y-%m-%d')
+            daily_data[day_key]['rentals'] += 1
+            daily_data[day_key]['rental_amount'] += rental.get('price', 0)
+            daily_data[day_key]['rental_details'].append({
+                'client_name': rental.get('client_name', ''),
+                'dumpster_code': rental.get('dumpster_code', ''),
+                'dumpster_size': rental.get('dumpster_size', ''),
+                'amount': rental.get('price', 0)
+            })
+    
+    # Process receivables
+    for receivable in receivables:
+        received_date = receivable.get('received_date')
+        if isinstance(received_date, str):
+            try:
+                received_date = datetime.fromisoformat(received_date.replace('Z', '+00:00'))
+            except:
+                continue
+        
+        if start_date <= received_date <= end_date:
+            day_key = received_date.strftime('%Y-%m-%d')
+            daily_data[day_key]['receivables'] += 1
+            daily_data[day_key]['receivable_amount'] += receivable.get('amount', 0)
+            daily_data[day_key]['receivable_details'].append({
+                'client_name': receivable.get('client_name', ''),
+                'dumpster_code': receivable.get('dumpster_code', ''),
+                'amount': receivable.get('amount', 0)
+            })
+    
+    # Process payments
+    for payment in payments:
+        due_date = payment.get('due_date')
+        if isinstance(due_date, str):
+            try:
+                due_date = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+            except:
+                continue
+        
+        if start_date <= due_date <= end_date:
+            day_key = due_date.strftime('%Y-%m-%d')
+            daily_data[day_key]['payments'] += 1
+            daily_data[day_key]['payment_amount'] += payment.get('amount', 0)
+            daily_data[day_key]['payment_details'].append({
+                'account_name': payment.get('account_name', ''),
+                'description': payment.get('description', ''),
+                'amount': payment.get('amount', 0)
+            })
+    
+    # Calculate totals
+    total_rentals = sum(day['rentals'] for day in daily_data.values())
+    total_rental_amount = sum(day['rental_amount'] for day in daily_data.values())
+    total_receivables = sum(day['receivables'] for day in daily_data.values())
+    total_receivable_amount = sum(day['receivable_amount'] for day in daily_data.values())
+    total_payments = sum(day['payments'] for day in daily_data.values())
+    total_payment_amount = sum(day['payment_amount'] for day in daily_data.values())
+    
+    # Convert to sorted list by date
+    sorted_days = sorted(daily_data.items())
+    
+    return {
+        "period": {
+            "start_date": start_date.strftime('%d/%m/%Y'),
+            "end_date": end_date.strftime('%d/%m/%Y')
+        },
+        "daily_data": [
+            {
+                "date": date,
+                "formatted_date": datetime.strptime(date, '%Y-%m-%d').strftime('%d/%m/%Y'),
+                **data
+            }
+            for date, data in sorted_days
+        ],
+        "totals": {
+            "total_rentals": total_rentals,
+            "total_rental_amount": total_rental_amount,
+            "total_receivables": total_receivables,
+            "total_receivable_amount": total_receivable_amount,
+            "total_payments": total_payments,
+            "total_payment_amount": total_payment_amount,
+            "net_income": total_receivable_amount - total_payment_amount
+        },
+        "chart_data": {
+            "dates": [datetime.strptime(date, '%Y-%m-%d').strftime('%d/%m') for date, _ in sorted_days],
+            "rentals": [data['rentals'] for _, data in sorted_days],
+            "receivables": [data['receivable_amount'] for _, data in sorted_days],
+            "payments": [data['payment_amount'] for _, data in sorted_days]
+        }
     }
 
 # Financial endpoints
