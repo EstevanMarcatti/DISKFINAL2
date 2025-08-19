@@ -161,13 +161,36 @@ function App() {
     }
   };
 
-  const fetchMonthlyFinancial = async () => {
+  const fetchMonthlyFinancial = async (startDate = null, endDate = null) => {
     try {
-      const response = await axios.get(`${API}/financial/monthly-summary`);
-      setMonthlyFinancial(response.data);
+      let url = `${API}/financial/monthly-summary`;
+      if (startDate && endDate) {
+        // Use the detailed report endpoint for custom date ranges
+        const response = await axios.post(`${API}/reports/detailed`, {
+          start_date: new Date(startDate).toISOString(),
+          end_date: new Date(endDate).toISOString()
+        });
+        
+        const reportData = response.data;
+        setMonthlyFinancial({
+          month: `${new Date(startDate).toLocaleDateString('pt-BR')} a ${new Date(endDate).toLocaleDateString('pt-BR')}`,
+          total_received: reportData.totals.total_receivable_amount || 0,
+          total_paid: reportData.totals.total_payment_amount || 0,
+          net_income: reportData.totals.net_income || 0,
+          receivables: reportData.daily_data.flatMap(day => day.receivable_details || []),
+          payments: reportData.daily_data.flatMap(day => day.payment_details || [])
+        });
+      } else {
+        const response = await axios.get(url);
+        setMonthlyFinancial(response.data);
+      }
     } catch (error) {
       console.error('Erro ao buscar resumo financeiro:', error);
     }
+  };
+
+  const updateFinancialSummary = async () => {
+    await fetchMonthlyFinancial(financialDateRange.start_date, financialDateRange.end_date);
   };
 
   useEffect(() => {
