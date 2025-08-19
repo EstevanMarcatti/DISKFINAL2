@@ -50,6 +50,12 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingClient, setEditingClient] = useState(null);
+  
+  // Map states
+  const [mapData, setMapData] = useState([]);
+  const [selectedMarker, setSelectedMarker] = useState(null);
+  const [addingMarker, setAddingMarker] = useState(false);
+  const [newMarkerPos, setNewMarkerPos] = useState(null);
 
   // Dialog states
   const [clientDialog, setClientDialog] = useState(false);
