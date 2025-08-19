@@ -424,6 +424,7 @@ function App() {
       setRentalDialog(false);
       fetchRentalNotes();
       fetchDashboardStats();
+      fetchMapData(); // Update map data when new rental is created
     } catch (error) {
       console.error('Erro ao criar nota de locação:', error);
       alert('Erro ao criar locação');
