@@ -84,15 +84,20 @@ class DiskEntulhoAPITester:
         
         return success
 
-    def test_create_client(self):
-        """Test POST /api/clients"""
+    def test_create_client_with_cpf_cnpj(self):
+        """Test POST /api/clients with CPF/CNPJ field - NEW FEATURE"""
         test_client = {
-            "name": f"Cliente Teste {datetime.now().strftime('%H%M%S')}",
-            "address": "Rua Teste, 123 - Centro"
+            "name": f"Cliente CPF Teste {datetime.now().strftime('%H%M%S')}",
+            "address": "Rua Teste CPF, 123 - Centro",
+            "phone": "(11) 99999-9999",
+            "email": "teste@email.com",
+            "cpf_cnpj": "123.456.789-00",
+            "additional_address": "Endereço adicional",
+            "notes": "Cliente de teste com CPF"
         }
         
         success, response = self.run_test(
-            "Create Client",
+            "Create Client with CPF/CNPJ",
             "POST",
             "clients",
             200,
@@ -102,6 +107,20 @@ class DiskEntulhoAPITester:
         if success and 'id' in response:
             self.created_client_id = response['id']
             print(f"   ✅ Client created with ID: {self.created_client_id}")
+            
+            # Verify CPF/CNPJ field is present
+            if 'cpf_cnpj' in response:
+                print(f"   ✅ CPF/CNPJ field present: {response['cpf_cnpj']}")
+            else:
+                print(f"   ❌ CPF/CNPJ field missing in response")
+                
+            # Verify all new fields
+            expected_fields = ['phone', 'email', 'cpf_cnpj', 'additional_address', 'notes']
+            for field in expected_fields:
+                if field in response:
+                    print(f"   ✅ {field}: {response[field]}")
+                else:
+                    print(f"   ❌ Missing field: {field}")
         
         return success
 
