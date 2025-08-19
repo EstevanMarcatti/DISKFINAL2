@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import uuid
 
 class DiskEntulhoAPITester:
-    def __init__(self, base_url="https://marchioretto-app.preview.emergentagent.com"):
+    def __init__(self, base_url="https://28bd7347-0792-4662-9a4e-de26a1de2e4e.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.tests_run = 0
