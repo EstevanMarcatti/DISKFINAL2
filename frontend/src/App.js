@@ -377,6 +377,17 @@ function App() {
         };
       }
       
+      // Try to auto-geocode the address
+      if (rentalData.client_address) {
+        try {
+          const geocodeResponse = await axios.get(`${API}/geocode/${encodeURIComponent(rentalData.client_address)}`);
+          rentalData.latitude = geocodeResponse.data.latitude;
+          rentalData.longitude = geocodeResponse.data.longitude;
+        } catch (geocodeError) {
+          console.warn('Geocoding failed, rental will be created without coordinates');
+        }
+      }
+      
       await axios.post(`${API}/rental-notes`, rentalData);
       setNewRental({
         client_id: '',
@@ -400,6 +411,76 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // New functions for landfills and routes
+  const [newLandfill, setNewLandfill] = useState({
+    name: '',
+    address: '',
+    latitude: '',
+    longitude: '',
+    capacity: '',
+    description: ''
+  });
+
+  const [newRoute, setNewRoute] = useState({
+    name: '',
+    start_latitude: '',
+    start_longitude: '',
+    landfill_id: '',
+    rental_note_ids: []
+  });
+
+  const createLandfill = async () => {
+    try {
+      setLoading(true);
+      await axios.post(`${API}/landfills`, {
+        ...newLandfill,
+        latitude: parseFloat(newLandfill.latitude),
+        longitude: parseFloat(newLandfill.longitude),
+        capacity: newLandfill.capacity ? parseFloat(newLandfill.capacity) : null
+      });
+      setNewLandfill({
+        name: '',
+        address: '',
+        latitude: '',
+        longitude: '',
+        capacity: '',
+        description: ''
+      });
+      setLandfillDialog(false);
+      fetchLandfills();
+    } catch (error) {
+      console.error('Erro ao criar aterro:', error);
+      alert('Erro ao criar aterro');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMapClick = (position) => {
+    if (addingMarker) {
+      setNewMarkerPos(position);
+    }
+  };
+
+  const handleMarkerConfirm = (position) => {
+    if (selectedRentalForLocation) {
+      // Update rental coordinates
+      updateRentalCoordinates(selectedRentalForLocation.id, position.lat, position.lng);
+      setSelectedRentalForLocation(null);
+      setAddLocationDialog(false);
+    } else {
+      // Add new location
+      alert(`Coordenadas salvas: ${position.lat.toFixed(6)}, ${position.lng.toFixed(6)}`);
+    }
+    setNewMarkerPos(null);
+    setAddingMarker(false);
+  };
+
+  const addLocationToRental = (rental) => {
+    setSelectedRentalForLocation(rental);
+    setAddLocationDialog(true);
   };
 
   const createPayment = async () => {
