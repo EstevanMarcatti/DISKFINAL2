@@ -400,33 +400,53 @@ async def mark_as_retrieved(note_id: str):
         raise HTTPException(status_code=404, detail="Nota não encontrada")
     return {"message": "Caçamba marcada como retirada"}
 
-@api_router.put("/rental-notes/{note_id}/pay")
-async def mark_as_paid(note_id: str):
-    # Get the rental note
-    rental = await db.rental_notes.find_one({"id": note_id})
-    if not rental:
-        raise HTTPException(status_code=404, detail="Nota não encontrada")
-    
-    # Mark as paid
-    await db.rental_notes.update_one(
+@api_router.put("/rental-notes/{note_id}/coordinates")
+async def update_rental_coordinates(note_id: str, latitude: float, longitude: float):
+    """Update coordinates for a rental note"""
+    result = await db.rental_notes.update_one(
         {"id": note_id},
-        {"$set": {"is_paid": True}}
+        {"$set": {"latitude": latitude, "longitude": longitude}}
     )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Nota não encontrada")
+    return {"message": "Coordenadas atualizadas com sucesso"}
+
+@api_router.get("/rental-notes/map-data")
+async def get_rental_notes_for_map():
+    """Get all rental notes with coordinates and status for map display"""
+    notes = await db.rental_notes.find().to_list(length=None)
+    result = []
     
-    # Create automatic receivable record
-    receivable_data = {
-        "client_id": rental.get("client_id"),
-        "client_name": rental["client_name"],
-        "rental_note_id": note_id,
-        "dumpster_code": rental["dumpster_code"],
-        "amount": rental["price"],
-        "received_date": datetime.now(timezone.utc)
-    }
+    for note in notes:
+        parsed_note = parse_from_mongo(note)
+        rental_note = RentalNote(**parsed_note)
+        
+        # Only include notes with coordinates
+        if rental_note.latitude is not None and rental_note.longitude is not None:
+            # Calculate color status
+            color_status = calculate_rental_status_color(
+                rental_note.rental_date, 
+                rental_note.status
+            )
+            
+            note_with_status = {
+                "id": rental_note.id,
+                "client_name": rental_note.client_name,
+                "client_address": rental_note.client_address,
+                "dumpster_code": rental_note.dumpster_code,
+                "dumpster_size": rental_note.dumpster_size,
+                "rental_date": rental_note.rental_date.isoformat(),
+                "status": rental_note.status,
+                "is_paid": rental_note.is_paid,
+                "price": rental_note.price,
+                "latitude": rental_note.latitude,
+                "longitude": rental_note.longitude,
+                "color_status": color_status,
+                "description": rental_note.description or ""
+            }
+            result.append(note_with_status)
     
-    receivable = Receivable(**receivable_data)
-    await db.receivables.insert_one(prepare_for_mongo(receivable.dict()))
-    
-    return {"message": "Caçamba marcada como paga e recebimento registrado"}
+    return result
 
 @api_router.get("/rental-notes/with-status")
 async def get_rental_notes_with_status():
