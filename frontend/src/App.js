@@ -229,54 +229,22 @@ function App() {
     }
   };
 
-  // Custom marker icons
-  const createCustomIcon = (color) => {
-    const svgIcon = `
-      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="16" cy="16" r="14" fill="${color}" stroke="white" stroke-width="3"/>
-        <text x="16" y="21" text-anchor="middle" fill="white" font-size="14" font-weight="bold">🚛</text>
-      </svg>
-    `;
-    
-    return new L.DivIcon({
-      html: svgIcon,
-      className: 'custom-marker-icon',
-      iconSize: [32, 32],
-      iconAnchor: [16, 16],
-    });
-  };
-
-  const getMarkerColor = (colorStatus) => {
-    switch (colorStatus) {
-      case 'green': return '#10b981';
-      case 'yellow': return '#f59e0b';
-      case 'red': return '#ef4444';
-      case 'purple': return '#8b5cf6';
-      default: return '#6b7280';
+  const fetchLandfills = async () => {
+    try {
+      const response = await axios.get(`${API}/landfills`);
+      setLandfills(response.data);
+    } catch (error) {
+      console.error('Erro ao buscar aterros:', error);
     }
   };
 
-  const getStatusTextForMap = (colorStatus, status) => {
-    if (status === 'retrieved') return 'Retirada';
-    switch (colorStatus) {
-      case 'green': return 'No Prazo (0-7 dias)';
-      case 'yellow': return 'Vencida (7-30 dias)';
-      case 'purple': return 'Abandonada (30+ dias)';
-      default: return 'Status Desconhecido';
+  const fetchRoutes = async () => {
+    try {
+      const response = await axios.get(`${API}/routes`);
+      setRoutes(response.data);
+    } catch (error) {
+      console.error('Erro ao buscar rotas:', error);
     }
-  };
-
-  // Component for handling map clicks
-  const handleMapClick = (position) => {
-    if (addingMarker) {
-      setNewMarkerPos(position);
-    }
-  };
-
-  const handleMarkerConfirm = (position) => {
-    alert(`Coordenadas: ${position.lat}, ${position.lng}\n\nImplementar associação com caçamba específica`);
-    setNewMarkerPos(null);
-    setAddingMarker(false);
   };
 
   useEffect(() => {
