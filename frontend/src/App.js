@@ -81,9 +81,9 @@ function App() {
     description: ''
   });
   const [newPrice, setNewPrice] = useState(0);
-  const [reportDates, setReportDates] = useState({
-    start_date: '',
-    end_date: ''
+  const [financialDateRange, setFinancialDateRange] = useState({
+    start_date: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+    end_date: new Date().toISOString().split('T')[0]
   });
 
   // Rental view states
