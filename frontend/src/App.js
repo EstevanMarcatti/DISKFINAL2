@@ -265,18 +265,16 @@ function App() {
   };
 
   // Component for handling map clicks
-  const MapClickHandler = () => {
-    useMapEvents({
-      click: (e) => {
-        if (addingMarker) {
-          setNewMarkerPos({
-            lat: e.latlng.lat,
-            lng: e.latlng.lng
-          });
-        }
-      },
-    });
-    return null;
+  const handleMapClick = (position) => {
+    if (addingMarker) {
+      setNewMarkerPos(position);
+    }
+  };
+
+  const handleMarkerConfirm = (position) => {
+    alert(`Coordenadas: ${position.lat}, ${position.lng}\n\nImplementar associação com caçamba específica`);
+    setNewMarkerPos(null);
+    setAddingMarker(false);
   };
 
   useEffect(() => {
